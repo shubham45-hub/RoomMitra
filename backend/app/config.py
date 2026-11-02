@@ -14,6 +14,9 @@ class Settings:
     otp_resend_seconds: int = int(os.getenv("OTP_RESEND_SECONDS", "60"))
     otp_max_attempts: int = int(os.getenv("OTP_MAX_ATTEMPTS", "5"))
     otp_requests_per_hour: int = int(os.getenv("OTP_REQUESTS_PER_HOUR", "5"))
+    moderator_phones: frozenset[str] = frozenset(
+        phone.strip() for phone in os.getenv("MODERATOR_PHONES", "").split(",") if phone.strip()
+    )
 settings = Settings()
 def validate_settings():
     if settings.app_env != "development":

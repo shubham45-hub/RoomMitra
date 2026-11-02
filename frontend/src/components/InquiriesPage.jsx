@@ -41,6 +41,7 @@ export default function InquiriesPage({ token, onBack }) {
                     <p className="eyebrow">ABOUT: {inquiry.listing_title}</p>
                     <h2>{inquiry.sender_name}</h2>
                   </div>
+                  {inquiry.is_new && <span className="inquiry-new-badge">NEW</span>}
                   <time dateTime={inquiry.created_at}>
                     {new Date(inquiry.created_at).toLocaleString("en-IN", {
                       dateStyle: "medium",

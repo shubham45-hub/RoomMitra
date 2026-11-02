@@ -1,8 +1,9 @@
 import { useState } from "react";
 import PhotoGallery from "./PhotoGallery";
-import { getListingContact, sendListingInquiry } from "../services/listings";
+import ListingReaction from "./ListingReaction";
+import { getListingContact, recordListingContact, reportListing, sendListingInquiry } from "../services/listings";
 
-export default function ListingDetails({ listing, token, currentUserId, onClose }) {
+export default function ListingDetails({ listing, token, currentUserId, onClose, onContactCountChanged, onReactionChange }) {
   const [showInquiry, setShowInquiry] = useState(false);
   const [inquiryMessage, setInquiryMessage] = useState("");
   const [sharePhone, setSharePhone] = useState(false);
@@ -11,6 +12,12 @@ export default function ListingDetails({ listing, token, currentUserId, onClose 
   const [ownerContact, setOwnerContact] = useState(null);
   const [contactError, setContactError] = useState("");
   const [loadingContact, setLoadingContact] = useState(false);
+  const [showReport, setShowReport] = useState(false);
+  const [reportReason, setReportReason] = useState("SCAM");
+  const [reportDetails, setReportDetails] = useState("");
+  const [reportStatus, setReportStatus] = useState("");
+  const [reportBusy, setReportBusy] = useState(false);
+  const [contactCount, setContactCount] = useState(listing.contacts_total ?? 0);
   const rupees = (amount) =>
     amount == null
       ? "Not specified"
@@ -33,6 +40,8 @@ export default function ListingDetails({ listing, token, currentUserId, onClose 
       setSharePhone(false);
       setShowInquiry(false);
       setInquiryStatus(result.message);
+      setContactCount(result.contacts_total);
+      onContactCountChanged?.(listing.id, result.contacts_total);
     } catch (error) {
       setInquiryStatus(error.message);
     } finally {
@@ -49,6 +58,35 @@ export default function ListingDetails({ listing, token, currentUserId, onClose 
       setContactError(error.message);
     } finally {
       setLoadingContact(false);
+    }
+  }
+
+  async function trackContact(method) {
+    try {
+      const result = await recordListingContact(token, listing.id, method);
+      setContactCount(result.contacts_total);
+      onContactCountChanged?.(listing.id, result.contacts_total);
+    } catch {
+      // Contact links remain usable if analytics recording is temporarily unavailable.
+    }
+  }
+
+  async function submitReport(event) {
+    event.preventDefault();
+    setReportBusy(true);
+    setReportStatus("");
+    try {
+      const result = await reportListing(token, listing.id, {
+        reason: reportReason,
+        details: reportDetails,
+      });
+      setReportStatus(result.message);
+      setReportDetails("");
+      setShowReport(false);
+    } catch (error) {
+      setReportStatus(error.message);
+    } finally {
+      setReportBusy(false);
     }
   }
 
@@ -70,12 +108,19 @@ export default function ListingDetails({ listing, token, currentUserId, onClose 
           ×
         </button>
 
-        <span className="listing-type">{listing.flat_type}</span>
-        <h2 id="detail-title">{listing.title}</h2>
-        <p className="listing-location">
-          {listing.locality}, {listing.city}
-          {listing.pincode ? ` · ${listing.pincode}` : ""}
-        </p>
+        <div className="detail-heading">
+          <span className="detail-eyebrow">ROOMMITRA LISTING</span>
+          <span className={`availability-pill${listing.status === "FILLED" ? " is-filled" : ""}`}>
+            {listing.status === "FILLED" ? "Filled" : "Available"}
+          </span>
+          <span className="listing-type">{listing.flat_type}</span>
+          <h2 id="detail-title">{listing.title}</h2>
+          <p className="listing-location detail-location">
+            <span aria-hidden="true">⌖</span>
+            {listing.locality}, {listing.city}
+            {listing.pincode ? ` · ${listing.pincode}` : ""}
+          </p>
+        </div>
 
         <PhotoGallery
           photoUrls={listing.photo_urls || []}
@@ -83,18 +128,38 @@ export default function ListingDetails({ listing, token, currentUserId, onClose 
           variant="details"
         />
 
-        <p className="detail-description">{listing.description}</p>
+        <ListingReaction listing={listing} token={token} currentUserId={currentUserId} onChanged={onReactionChange} />
 
-        <div className="detail-facts">
-          <div><span>Monthly rent</span><strong>{rupees(listing.monthly_rent)}</strong></div>
-          <div><span>Security deposit</span><strong>{rupees(listing.security_deposit)}</strong></div>
-          <div><span>Available beds</span><strong>{listing.available_beds}</strong></div>
-          <div><span>Brokerage</span><strong>{rupees(listing.brokerage)}</strong></div>
-          <div><span>Furnished</span><strong>{listing.is_furnished ? "Yes" : "No"}</strong></div>
-          <div><span>Posted by</span><strong>{listing.owner_name}</strong></div>
+        <div className="detail-price-card">
+          <div className="detail-rent">
+            <span>Monthly rent</span>
+            <strong>{rupees(listing.monthly_rent)}<small> / month</small></strong>
+          </div>
+          <div className="detail-deposit">
+            <span>Security deposit</span>
+            <strong>{rupees(listing.security_deposit)}</strong>
+          </div>
         </div>
 
-        {listing.user_id !== currentUserId && (
+        <section className="detail-about">
+          <h3>About this place</h3>
+          <p className="detail-description">{listing.description}</p>
+        </section>
+
+        <section className="detail-overview">
+          <h3>At a glance</h3>
+          <div className="detail-facts">
+            <div><span>Available beds</span><strong>{listing.available_beds}</strong></div>
+            <div><span>Brokerage</span><strong>{rupees(listing.brokerage)}</strong></div>
+            <div><span>Furnishing</span><strong>{listing.is_furnished ? "Furnished" : "Unfurnished"}</strong></div>
+            <div><span>Listed by</span><strong>{listing.owner_name}</strong></div>
+            <div><span>Viewers in last 24 hours</span><strong>{listing.views_last_day ?? 0}</strong></div>
+            <div><span>People who contacted the lister</span><strong>{contactCount}</strong></div>
+            <div><span>People who contacted the lister</span><strong>{contactCount}</strong></div>
+          </div>
+        </section>
+
+        {listing.user_id !== currentUserId && listing.status === "ACTIVE" && (
           <section className="listing-inquiry-section">
             {inquiryStatus && <p className="message" role="status">{inquiryStatus}</p>}
             <div className="direct-contact-panel">
@@ -108,12 +173,13 @@ export default function ListingDetails({ listing, token, currentUserId, onClose 
                 </button>
               ) : (
                 <div className="direct-contact-actions">
-                  <a className="direct-contact-link" href={`tel:${ownerContact.phone}`}>Call lister</a>
+                  <a className="direct-contact-link" href={`tel:${ownerContact.phone}`} onClick={() => { void trackContact("CALL"); }}>Call lister</a>
                   <a
                     className="direct-contact-link whatsapp"
                     href={`https://wa.me/${ownerPhoneDigits}?text=${directWhatsappMessage}`}
                     target="_blank"
                     rel="noreferrer"
+                    onClick={() => { void trackContact("WHATSAPP"); }}
                   >
                     WhatsApp lister
                   </a>
@@ -157,6 +223,45 @@ export default function ListingDetails({ listing, token, currentUserId, onClose 
                     {busy ? "Sending…" : "Send enquiry"}
                   </button>
                   <button type="button" className="cancel-edit" onClick={() => setShowInquiry(false)}>Cancel</button>
+                </div>
+              </form>
+            )}
+          </section>
+        )}
+
+        {listing.user_id !== currentUserId && listing.status === "FILLED" && (
+          <div className="filled-listing-notice" role="status">
+            This place has been filled. The lister is not accepting new contacts for this listing.
+          </div>
+        )}
+
+        {listing.user_id !== currentUserId && listing.status === "ACTIVE" && (
+          <section className="report-listing-section">
+            {reportStatus && <p className="message" role="status">{reportStatus}</p>}
+            {!showReport ? (
+              <button type="button" className="report-listing-toggle" onClick={() => setShowReport(true)}>
+                Report this listing
+              </button>
+            ) : (
+              <form className="report-listing-form" onSubmit={submitReport}>
+                <h3>Tell us what seems wrong</h3>
+                <label>
+                  Reason
+                  <select value={reportReason} onChange={(event) => setReportReason(event.target.value)}>
+                    <option value="SCAM">Possible scam or fraud</option>
+                    <option value="WRONG_INFO">Incorrect listing information</option>
+                    <option value="DUPLICATE">Duplicate listing</option>
+                    <option value="INAPPROPRIATE">Inappropriate content</option>
+                    <option value="OTHER">Something else</option>
+                  </select>
+                </label>
+                <label>
+                  Details (optional)
+                  <textarea value={reportDetails} onChange={(event) => setReportDetails(event.target.value)} maxLength={1000} rows={3} placeholder="Share details that can help us review this listing." />
+                </label>
+                <div className="inquiry-actions">
+                  <button type="submit" disabled={reportBusy}>{reportBusy ? "Sending…" : "Submit report"}</button>
+                  <button type="button" className="cancel-edit" onClick={() => setShowReport(false)}>Cancel</button>
                 </div>
               </form>
             )}

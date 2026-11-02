@@ -11,3 +11,9 @@ export function updateProfile(token, profile) {
     body: JSON.stringify(profile),
   });
 }
+
+export function uploadProfileAvatar(token, image) {
+  const body = new FormData();
+  body.append("image", image);
+  return apiRequest("/auth/me/avatar", { token, method: "POST", body });
+}

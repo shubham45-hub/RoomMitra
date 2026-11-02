@@ -7,6 +7,7 @@ from app.routes.locations import router as locations_router
 from app.config import validate_settings
 from app.routes.auth import router as auth_router
 from app.routes.listings import router as listings_router
+from app.routes.moderation import router as moderation_router
 
 validate_settings()
 
@@ -29,6 +30,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(listings_router)
 app.include_router(locations_router)
+app.include_router(moderation_router)
 
 
 @app.get("/health")

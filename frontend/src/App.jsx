@@ -5,6 +5,8 @@ import ProfileForm from "./components/ProfileForm";
 import { getProfile } from "./services/profile";
 import MyListingsPage from "./components/MyListingsPage";
 import InquiriesPage from "./components/InquiriesPage";
+import ModerationPage from "./components/ModerationPage";
+import { getModerationAccess } from "./services/listings";
 import "./App.css";
 
 const TOKEN_KEY = "roommitra_token";
@@ -13,6 +15,7 @@ export default function App() {
   const [token, setToken] = useState(() => sessionStorage.getItem(TOKEN_KEY));
   const [profile, setProfile] = useState(null);
   const [screen, setScreen] = useState("listings");
+  const [canModerate, setCanModerate] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -26,10 +29,24 @@ export default function App() {
       });
   }, [token]);
 
+  useEffect(() => {
+    if (!token) return undefined;
+    let cancelled = false;
+    getModerationAccess(token)
+      .then((access) => {
+        if (!cancelled) setCanModerate(access.can_moderate);
+      })
+      .catch(() => {
+        if (!cancelled) setCanModerate(false);
+      });
+    return () => { cancelled = true; };
+  }, [token]);
+
   function signedIn(accessToken, user) {
     sessionStorage.setItem(TOKEN_KEY, accessToken);
     setToken(accessToken);
     setProfile(user);
+    setCanModerate(false);
     setScreen("listings");
   }
 
@@ -37,6 +54,7 @@ export default function App() {
     sessionStorage.removeItem(TOKEN_KEY);
     setToken(null);
     setProfile(null);
+    setCanModerate(false);
   }
 
   if (!token) {
@@ -47,10 +65,34 @@ export default function App() {
     return <main className="page"><p>Loading your profile…</p></main>;
   }
 
+  const needsOnboarding =
+    !profile.preferred_city ||
+    !profile.email ||
+    !profile.sex ||
+    !profile.religion ||
+    !profile.origin_state ||
+    !profile.name ||
+    profile.name === "RoomMitra user";
+
+  if (needsOnboarding) {
+    return (
+      <main className="page">
+        <ProfileForm
+          profile={profile}
+          token={token}
+          onSaved={setProfile}
+          onSignOut={signOut}
+          onboarding
+        />
+      </main>
+    );
+  }
+
   if (screen === "my-listings") {
   return (
     <MyListingsPage
       token={token}
+      userId={profile.id}
       onBack={() => setScreen("listings")}
     />
   );
@@ -58,6 +100,10 @@ export default function App() {
 
   if (screen === "inquiries") {
     return <InquiriesPage token={token} onBack={() => setScreen("listings")} />;
+  }
+
+  if (screen === "moderation" && canModerate) {
+    return <ModerationPage token={token} onBack={() => setScreen("listings")} />;
   }
 
   if (screen === "profile") {
@@ -78,9 +124,12 @@ export default function App() {
     <ListingsPage
       token={token}
       userId={profile.id}
+      preferredCity={profile.preferred_city}
       onProfile={() => setScreen("profile")}
       onMyListings={() => setScreen("my-listings")}
       onInquiries={() => setScreen("inquiries")}
+      onModeration={() => setScreen("moderation")}
+      canModerate={canModerate}
       onSignOut={signOut}
     />
   );

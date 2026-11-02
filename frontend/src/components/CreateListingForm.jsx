@@ -5,7 +5,7 @@ import LocalityAutocomplete from "./LocalityAutocomplete";
 const initialForm = {
   title: "",
   description: "",
-  city: "Kolkata",
+  city: "",
   locality: "",
   pincode: "",
   flat_type: "",
@@ -16,8 +16,12 @@ const initialForm = {
   brokerage: "0",
 };
 
-export default function CreateListingForm({ token, onCreated, onCancel }) {
-  const [form, setForm] = useState(initialForm);
+function emptyForm(preferredCity) {
+  return { ...initialForm, city: preferredCity || "" };
+}
+
+export default function CreateListingForm({ token, preferredCity, onCreated, onCancel }) {
+  const [form, setForm] = useState(() => emptyForm(preferredCity));
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [photos, setPhotos] = useState([]);
@@ -66,7 +70,7 @@ export default function CreateListingForm({ token, onCreated, onCancel }) {
         try {
           await uploadListingImages(token, created.id, photos);
         } catch (uploadError) {
-          setForm(initialForm);
+          setForm(emptyForm(preferredCity));
           choosePhotos([]);
           onCreated(
             created,
@@ -76,7 +80,7 @@ export default function CreateListingForm({ token, onCreated, onCancel }) {
         }
       }
 
-      setForm(initialForm);
+      setForm(emptyForm(preferredCity));
       choosePhotos([]);
       onCreated(created);
     } catch (error) {

@@ -14,6 +14,11 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), nullable=False, default="RoomMitra user")
     email = Column(String(255), unique=True, index=True, nullable=True)
+    preferred_city = Column(String(100), nullable=True)
+    sex = Column(String(20), nullable=True)
+    religion = Column(String(100), nullable=True)
+    origin_state = Column(String(100), nullable=True)
+    avatar_url = Column(String(500), nullable=True)
     phone = Column(String(20), unique=True, index=True, nullable=True)
     password_hash = Column(String(255), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
@@ -50,6 +55,7 @@ class Listing(Base):
     status = Column(Enum(ListingStatus, name="listing_status"), default=ListingStatus.DRAFT, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    expires_at = Column(DateTime(timezone=True), nullable=False)
     owner = relationship("User", back_populates="listings")
     images = relationship("ListingImage", back_populates="listing", cascade="all, delete-orphan", order_by="ListingImage.id")
 
@@ -108,6 +114,58 @@ class ListingInquiry(Base):
     message = Column(Text, nullable=False)
     phone_shared = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    read_at = Column(DateTime(timezone=True), nullable=True)
     listing = relationship("Listing")
     sender = relationship("User", foreign_keys=[sender_id])
     owner = relationship("User", foreign_keys=[owner_id])
+
+class ListingReport(Base):
+    __tablename__ = "listing_reports"
+    id = Column(Integer, primary_key=True)
+    listing_id = Column(Integer, ForeignKey("listings.id", ondelete="CASCADE"), nullable=False, index=True)
+    reporter_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    reason = Column(String(40), nullable=False)
+    details = Column(Text, nullable=True)
+    status = Column(String(20), nullable=False, default="OPEN", server_default="OPEN")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    reviewed_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    listing = relationship("Listing")
+    reporter = relationship("User", foreign_keys=[reporter_id])
+    reviewer = relationship("User", foreign_keys=[reviewed_by])
+
+class ListingView(Base):
+    __tablename__ = "listing_views"
+    id = Column(Integer, primary_key=True)
+    listing_id = Column(Integer, ForeignKey("listings.id", ondelete="CASCADE"), nullable=False)
+    viewer_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    last_viewed_at = Column(DateTime(timezone=True), nullable=False)
+    __table_args__ = (
+        UniqueConstraint("listing_id", "viewer_id", name="uq_listing_view_listing_viewer"),
+        Index("ix_listing_views_listing_last_viewed", "listing_id", "last_viewed_at"),
+    )
+
+class ListingContact(Base):
+    __tablename__ = "listing_contacts"
+    id = Column(Integer, primary_key=True)
+    listing_id = Column(Integer, ForeignKey("listings.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    first_contacted_at = Column(DateTime(timezone=True), nullable=False)
+    last_contacted_at = Column(DateTime(timezone=True), nullable=False)
+    __table_args__ = (
+        UniqueConstraint("listing_id", "user_id", name="uq_listing_contact_listing_user"),
+        Index("ix_listing_contacts_listing", "listing_id"),
+    )
+
+class ListingReaction(Base):
+    __tablename__ = "listing_reactions"
+    id = Column(Integer, primary_key=True)
+    listing_id = Column(Integer, ForeignKey("listings.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    reaction = Column(String(10), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    __table_args__ = (
+        UniqueConstraint("listing_id", "user_id", name="uq_listing_reaction_listing_user"),
+        Index("ix_listing_reactions_listing", "listing_id"),
+    )

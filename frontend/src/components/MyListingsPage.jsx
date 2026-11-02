@@ -2,12 +2,14 @@ import { useEffect, useState } from "react";
 import {
   deleteListing,
   getMyListings,
+  renewListing,
   updateListing,
 } from "../services/listings";
 import EditListingForm from "./EditListingForm";
 import PhotoGallery from "./PhotoGallery";
+import ListingReaction from "./ListingReaction";
 
-export default function MyListingsPage({ token, onBack }) {
+export default function MyListingsPage({ token, userId, onBack }) {
   const [listings, setListings] = useState([]);
   const [message, setMessage] = useState("");
   const [busyId, setBusyId] = useState(null);
@@ -43,9 +45,27 @@ export default function MyListingsPage({ token, onBack }) {
 
     try {
       const nextStatus = listing.status === "ACTIVE" ? "PAUSED" : "ACTIVE";
-      await updateListing(token, listing.id, { status: nextStatus });
+      if (listing.is_expired) {
+        await renewListing(token, listing.id);
+      } else {
+        await updateListing(token, listing.id, { status: nextStatus });
+      }
       await loadListings();
-      setMessage(`Listing ${nextStatus === "ACTIVE" ? "published" : "paused"}.`);
+      setMessage(listing.is_expired ? "Listing renewed for 30 days and published." : `Listing ${nextStatus === "ACTIVE" ? "published" : "paused"}.`);
+    } catch (error) {
+      setMessage(error.message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function markFilled(listing) {
+    setBusyId(listing.id);
+    setMessage("");
+    try {
+      await updateListing(token, listing.id, { status: "FILLED" });
+      await loadListings();
+      setMessage("Listing marked as filled and removed from search results.");
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -117,8 +137,8 @@ export default function MyListingsPage({ token, onBack }) {
                   variant="my-listing"
                 />
                 <div className="my-listing-heading">
-                    <span className={`status-pill status-${listing.status.toLowerCase()}`}>
-                    {listing.status}
+                    <span className={`status-pill status-${(listing.is_expired ? "expired" : listing.status).toLowerCase()}`}>
+                    {listing.is_expired ? "EXPIRED" : listing.status}
                     </span>
                     <span className="listing-type">{listing.flat_type}</span>
                 </div>
@@ -128,6 +148,18 @@ export default function MyListingsPage({ token, onBack }) {
                 <p className="my-listing-rent">
                     ₹{Number(listing.monthly_rent).toLocaleString("en-IN")} / month
                 </p>
+                <p className={`listing-expiry${listing.is_expired ? " is-expired" : ""}`}>
+                  {listing.is_expired
+                    ? `Expired ${new Date(listing.expires_at).toLocaleDateString("en-IN")}`
+                    : `Expires ${new Date(listing.expires_at).toLocaleDateString("en-IN")}`}
+                </p>
+                <p className="listing-view-count">
+                  ◉ {listing.views_last_day ?? 0} unique {listing.views_last_day === 1 ? "viewer" : "viewers"} in the last 24 hours
+                </p>
+                <p className="listing-contact-count">
+                  {listing.contacts_total ?? 0} {listing.contacts_total === 1 ? "person has" : "people have"} contacted you
+                </p>
+                <ListingReaction listing={listing} token={token} currentUserId={userId} />
 
                 <div className="my-listing-actions">
                     <button
@@ -141,8 +173,19 @@ export default function MyListingsPage({ token, onBack }) {
                     disabled={busyId === listing.id}
                     onClick={() => toggleStatus(listing)}
                     >
-                    {listing.status === "ACTIVE" ? "Pause listing" : "Publish again"}
+                    {listing.is_expired
+                      ? listing.status === "FILLED" ? "Renew & publish" : "Renew for 30 days"
+                      : listing.status === "ACTIVE" ? "Pause listing" : listing.status === "PAUSED" ? "Publish again" : "Mark available"}
                     </button>
+                    {!listing.is_expired && ["ACTIVE", "PAUSED"].includes(listing.status) && (
+                      <button
+                        className="status-action"
+                        disabled={busyId === listing.id}
+                        onClick={() => markFilled(listing)}
+                      >
+                        Mark as filled
+                      </button>
+                    )}
                     <button
                     className="delete-action"
                     disabled={busyId === listing.id}
