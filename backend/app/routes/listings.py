@@ -11,12 +11,13 @@ from sqlalchemy import case, func, or_
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session, joinedload, selectinload
 
+from app.config import settings
 from app.database import get_db
 from app.models import Listing, ListingContact, ListingImage, ListingInquiry, ListingReaction, ListingReport, ListingStatus, ListingView, SavedListing, User
 from app.services.security import get_current_user, get_optional_current_user
 
 router = APIRouter(prefix="/listings", tags=["listings"])
-UPLOAD_DIR = Path(__file__).resolve().parents[2] / "uploads" / "listings"
+UPLOAD_DIR = settings.upload_dir / "listings"
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
 MAX_LISTING_IMAGES = 12
 ALLOWED_IMAGE_FORMATS = {"JPEG": ".jpg", "PNG": ".png", "WEBP": ".webp"}

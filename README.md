@@ -37,3 +37,24 @@ The frontend includes About, Privacy, Terms, and Copyright & reports pages, link
 - Test sign-up, sign-in, profile deletion, listing/photo deletion, contact sharing, user reports, copyright reports, and moderation with production-like settings before launch.
 
 Copyright notice: © 2026 RoomMitra. All rights reserved. Third-party materials remain subject to their owners' licenses and notices.
+
+## Production deployment on a Docker host
+
+The repository now includes production Dockerfiles, an Nginx SPA server, and a Caddy + PostgreSQL Compose stack. This is a single-host deployment baseline; the host and its persistent volumes still need backups and monitoring. It is not a one-click deployment to a managed hosting provider.
+
+1. Provision a Docker host with persistent disk, point `roommitra.example.com` and `api.roommitra.example.com` DNS records to it, and allow inbound TCP ports 80 and 443 (UDP 443 is optional for HTTP/3).
+2. Copy `deploy/.env.production.example` to the repository root as `.env.production`. Replace example domains with your real domains, set the exact frontend/API URLs and hosts, and enter production PostgreSQL and current SMS provider credentials. Generate independent long secrets for `JWT_SECRET_KEY` and `OTP_HMAC_SECRET`. Use an URL-safe random database password and use that same value in `DATABASE_URL`.
+3. Back up any existing production database before applying migrations. From the repository root, run:
+
+   ```powershell
+   docker compose --env-file .env.production -f deploy/compose.production.yml up -d postgres
+   docker compose --env-file .env.production -f deploy/compose.production.yml build api frontend
+   docker compose --env-file .env.production -f deploy/compose.production.yml run --rm api alembic upgrade head
+   docker compose --env-file .env.production -f deploy/compose.production.yml up -d
+   docker compose --env-file .env.production -f deploy/compose.production.yml logs -f
+   ```
+
+   Migrations are run as an explicit release step; the API container does not run schema changes automatically. The Compose file keeps PostgreSQL data, uploaded photos, and Caddy certificates in named persistent volumes. Back up all three where needed, and do not use `docker compose down -v` on a live deployment.
+4. Check `https://roommitra.example.com`, `https://api.roommitra.example.com/health`, and sign-in, uploads, account deletion, and moderation. Update the frontend image whenever `VITE_API_BASE_URL` changes because Vite embeds it at build time.
+
+The sample values are placeholders. Production startup deliberately fails without exact CORS/host settings, strong secrets, and the already-configured production SMS provider credentials. Complete legal and asset review above before accepting public users.

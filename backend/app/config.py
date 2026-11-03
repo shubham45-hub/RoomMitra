@@ -2,10 +2,26 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 from dotenv import load_dotenv
+
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+
+
+def _csv_setting(name: str, default: str = "") -> tuple[str, ...]:
+    return tuple(value.strip() for value in os.getenv(name, default).split(",") if value.strip())
+
+
 @dataclass(frozen=True)
 class Settings:
     app_env: str = os.getenv("APP_ENV", "development").lower()
+    cors_origins: tuple[str, ...] = _csv_setting(
+        "CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"
+    )
+    allowed_hosts: tuple[str, ...] = _csv_setting(
+        "ALLOWED_HOSTS", "localhost,127.0.0.1,testserver"
+    )
+    upload_dir: Path = Path(os.getenv(
+        "UPLOAD_DIR", str(Path(__file__).resolve().parent.parent / "uploads")
+    )).resolve()
     otp_hmac_secret: str = os.getenv("OTP_HMAC_SECRET", "")
     jwt_secret_key: str = os.getenv("JWT_SECRET_KEY", "")
     jwt_algorithm: str = os.getenv("JWT_ALGORITHM", "HS256")
@@ -29,6 +45,10 @@ class Settings:
 settings = Settings()
 def validate_settings():
     if settings.app_env != "development":
+        if not settings.cors_origins or "*" in settings.cors_origins:
+            raise RuntimeError("Set CORS_ORIGINS to the exact production frontend origin(s)")
+        if not settings.allowed_hosts or "*" in settings.allowed_hosts:
+            raise RuntimeError("Set ALLOWED_HOSTS to the production API hostname(s)")
         if len(settings.jwt_secret_key) < 32 or len(settings.otp_hmac_secret) < 32:
             raise RuntimeError("JWT_SECRET_KEY and OTP_HMAC_SECRET must each be at least 32 characters outside development")
         if settings.sms_provider != "twilio":

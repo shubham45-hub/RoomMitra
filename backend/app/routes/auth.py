@@ -18,8 +18,8 @@ from app.services.phone import normalize_indian_phone
 from app.services.security import create_access_token, get_current_user, hash_otp
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
-PROFILE_IMAGE_DIR = Path(__file__).resolve().parents[2] / "uploads" / "profiles"
-LISTING_IMAGE_DIR = Path(__file__).resolve().parents[2] / "uploads" / "listings"
+PROFILE_IMAGE_DIR = settings.upload_dir / "profiles"
+LISTING_IMAGE_DIR = settings.upload_dir / "listings"
 MAX_PROFILE_IMAGE_BYTES = 5 * 1024 * 1024
 PROFILE_IMAGE_FORMATS = {"JPEG": ".jpg", "PNG": ".png", "WEBP": ".webp"}
 

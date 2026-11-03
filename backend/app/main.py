@@ -1,10 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pathlib import Path
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from app.routes.locations import router as locations_router
 
-from app.config import validate_settings
+from app.config import settings, validate_settings
 from app.routes.auth import router as auth_router
 from app.routes.listings import router as listings_router
 from app.routes.moderation import router as moderation_router
@@ -12,16 +12,14 @@ from app.routes.moderation import router as moderation_router
 validate_settings()
 
 app = FastAPI(title="RoomMitra API")
-UPLOAD_ROOT = Path(__file__).resolve().parent.parent / "uploads"
-UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=UPLOAD_ROOT), name="uploads")
+settings.upload_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=settings.upload_dir), name="uploads")
+
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(settings.allowed_hosts))
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=list(settings.cors_origins),
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
