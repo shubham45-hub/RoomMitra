@@ -291,13 +291,19 @@ export default function ListingDetails({ listing, token, currentUserId, onClose,
                     <option value="WRONG_INFO">Incorrect listing information</option>
                     <option value="DUPLICATE">Duplicate listing</option>
                     <option value="INAPPROPRIATE">Inappropriate content</option>
-                    <option value="OTHER">Something else</option>
+                  <option value="COPYRIGHT">Copyright infringement</option>
+                  <option value="OTHER">Something else</option>
                   </select>
                 </label>
                 <label>
                   Details (optional)
-                  <textarea value={reportDetails} onChange={(event) => setReportDetails(event.target.value)} maxLength={1000} rows={3} placeholder="Share details that can help us review this listing." />
+                  <textarea value={reportDetails} onChange={(event) => setReportDetails(event.target.value)} maxLength={1000} rows={3} required={reportReason === "COPYRIGHT"} placeholder={reportReason === "COPYRIGHT" ? "Identify the protected work and where it appears in this listing." : "Share details that can help us review this listing."} />
                 </label>
+                {reportReason === "COPYRIGHT" && (
+                  <p className="copyright-report-help">
+                    Identify the work you own or represent, where it appears in this listing, and how the operator can verify your claim. Do not include sensitive identity documents.
+                  </p>
+                )}
                 <div className="inquiry-actions">
                   <button type="submit" disabled={reportBusy}>{reportBusy ? "Sending…" : "Submit report"}</button>
                   <button type="button" className="cancel-edit" onClick={() => setShowReport(false)}>Cancel</button>

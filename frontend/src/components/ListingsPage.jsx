@@ -3,6 +3,7 @@ import CreateListingForm from "./CreateListingForm";
 import ListingCard from "./ListingCard";
 import ListingDetails from "./ListingDetails";
 import ExpiryNotification from "./ExpiryNotification";
+import SiteFooter from "./SiteFooter";
 import { getImageUrl } from "../services/api";
 import {
   getListing,
@@ -40,7 +41,7 @@ function describeResults(filters, city) {
   return `Showing ${parts.join(" ")}`;
 }
 
-export default function ListingsPage({ token, userId, profile, preferredCity, onProfile, onSignOut, onMyListings, onInquiries, onModeration, canModerate }) {
+export default function ListingsPage({ token, userId, profile, preferredCity, onProfile, onSignOut, onMyListings, onInquiries, onModeration, onPublicPage, canModerate }) {
   const [keyword, setKeyword] = useState("");
   const [flatType, setFlatType] = useState("");
   const [listings, setListings] = useState([]);
@@ -568,6 +569,7 @@ export default function ListingsPage({ token, userId, profile, preferredCity, on
           </button>
         )}
       </section>
+      <SiteFooter onNavigate={onPublicPage} />
       {showBackToTop && (
         <button
           type="button"

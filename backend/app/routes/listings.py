@@ -72,7 +72,7 @@ class InquiryCreate(BaseModel):
 
 
 class ListingReportCreate(BaseModel):
-    reason: str = Field(pattern="^(SCAM|WRONG_INFO|DUPLICATE|INAPPROPRIATE|OTHER)$")
+    reason: str = Field(pattern="^(SCAM|WRONG_INFO|DUPLICATE|INAPPROPRIATE|COPYRIGHT|OTHER)$")
     details: str | None = Field(default=None, max_length=1000)
 
 

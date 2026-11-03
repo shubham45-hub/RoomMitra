@@ -6,6 +6,8 @@ import { getProfile } from "./services/profile";
 import MyListingsPage from "./components/MyListingsPage";
 import InquiriesPage from "./components/InquiriesPage";
 import ModerationPage from "./components/ModerationPage";
+import PublicInfoPage from "./components/PublicInfoPage";
+import SiteFooter from "./components/SiteFooter";
 import { getModerationAccess } from "./services/listings";
 import "./App.css";
 
@@ -15,6 +17,7 @@ export default function App() {
   const [token, setToken] = useState(() => sessionStorage.getItem(TOKEN_KEY));
   const [profile, setProfile] = useState(null);
   const [screen, setScreen] = useState("listings");
+  const [publicPage, setPublicPage] = useState(null);
   const [canModerate, setCanModerate] = useState(false);
 
   useEffect(() => {
@@ -70,8 +73,23 @@ export default function App() {
     setCanModerate(false);
   }
 
+  if (publicPage) {
+    return (
+      <PublicInfoPage
+        page={publicPage}
+        onNavigate={setPublicPage}
+        onBack={() => setPublicPage(null)}
+      />
+    );
+  }
+
   if (!token) {
-    return <main className="page"><AuthForm onSignedIn={signedIn} /></main>;
+    return (
+      <main className="page">
+        <AuthForm onSignedIn={signedIn} />
+        <SiteFooter onNavigate={setPublicPage} />
+      </main>
+    );
   }
 
   if (!profile) {
@@ -145,6 +163,7 @@ export default function App() {
       onModeration={() => setScreen("moderation")}
       canModerate={canModerate}
       onSignOut={signOut}
+      onPublicPage={setPublicPage}
     />
   );
 }

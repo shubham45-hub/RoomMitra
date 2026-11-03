@@ -72,10 +72,10 @@ def request_otp(body: OtpRequest, request: Request, db: Session = Depends(get_db
     db.commit()
     try:
         get_otp_delivery().send(phone, code)
-    except Exception:
+    except Exception as exc:
         db.delete(challenge)
         db.commit()
-        raise HTTPException(503, "OTP delivery is not configured")
+        raise HTTPException(503, "Could not send the verification code. Please try again later.") from exc
     response = {"detail": "If the number can receive a code, one has been sent."}
     if settings.app_env == "development":
         response["development_otp"] = code

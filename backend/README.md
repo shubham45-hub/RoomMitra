@@ -35,4 +35,6 @@ Listings support up to 12 photos each. The upload form groups them by hall, kitc
 
 Each listing records whether its rent is per person or for the whole flat. For whole-flat rent, the app displays an approximate equal split across current residents and incoming flatmates.
 
-The SMS provider class is an integration seam only; production delivery must be implemented before setting `APP_ENV` outside development.
+OTP delivery uses local-only codes in development and Twilio SMS in any non-development environment. For deployment, set `APP_ENV=production`, `SMS_PROVIDER=twilio`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and exactly one sender setting: `TWILIO_FROM_NUMBER` or `TWILIO_MESSAGING_SERVICE_SID`. Set `OTP_SMS_TEMPLATE` to a text that includes `{code}` and `{minutes}`. Keep all credentials in your hosting provider's secret environment settings, never in Git. Production startup fails closed when Twilio is not configured, and the API never returns or logs the OTP outside development.
+
+Twilio trial accounts may restrict delivery to numbers that you have verified. Twilio's published India rate is currently $0.0832 per outbound SMS segment, with possible carrier fees; rates can change. Twilio documents an international route that does not require DLT registration, and a domestic route that requires DLT registration for the entity and sender ID. For domestic delivery, the OTP message must use an approved DLT content template and registered sender ID. Complete the account, sender, and template setup before production launch.

@@ -6,6 +6,7 @@ const REASONS = {
   WRONG_INFO: "Incorrect listing information",
   DUPLICATE: "Duplicate listing",
   INAPPROPRIATE: "Inappropriate content",
+  COPYRIGHT: "Copyright infringement",
   OTHER: "Something else",
 };
 
