@@ -1,6 +1,5 @@
 import secrets
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 import io
 from uuid import uuid4
 
@@ -14,6 +13,7 @@ from app.config import settings
 from app.database import get_db
 from app.models import OtpChallenge, User
 from app.services.delivery import get_otp_delivery
+from app.services.object_storage import delete_upload, resolve_upload_url, save_upload
 from app.services.phone import normalize_indian_phone
 from app.services.security import create_access_token, get_current_user, hash_otp
 
@@ -44,7 +44,7 @@ class ProfileUpdate(BaseModel):
 def profile_data(user: User):
     return {"id": user.id, "phone": user.phone, "name": user.name, "email": user.email,
             "preferred_city": user.preferred_city, "sex": user.sex, "religion": user.religion,
-            "origin_state": user.origin_state, "avatar_url": user.avatar_url}
+            "origin_state": user.origin_state, "avatar_url": resolve_upload_url(user.avatar_url)}
 
 
 @router.post("/otp/request", status_code=202)
@@ -122,9 +122,9 @@ def delete_profile(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    profile_photo = PROFILE_IMAGE_DIR / Path(user.avatar_url or "").name if user.avatar_url else None
+    profile_photo = user.avatar_url
     listing_photos = [
-        LISTING_IMAGE_DIR / Path(photo.image_url).name
+        photo.image_url
         for listing in user.listings
         for photo in listing.images
         if photo.image_url
@@ -134,9 +134,9 @@ def delete_profile(
     db.delete(user)
     db.commit()
 
-    for path in [profile_photo, *listing_photos]:
-        if path and path.parent in {PROFILE_IMAGE_DIR, LISTING_IMAGE_DIR}:
-            path.unlink(missing_ok=True)
+    delete_upload(profile_photo, PROFILE_IMAGE_DIR)
+    for photo_url in listing_photos:
+        delete_upload(photo_url, LISTING_IMAGE_DIR)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -196,14 +196,25 @@ async def upload_profile_avatar(
         with Image.open(io.BytesIO(content)) as uploaded:
             uploaded.thumbnail((800, 800))
             safe_image = uploaded.convert("RGB")
-            PROFILE_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
             filename = f"{uuid4().hex}.jpg"
-            safe_image.save(PROFILE_IMAGE_DIR / filename, "JPEG", quality=88, optimize=True)
+            encoded_image = io.BytesIO()
+            safe_image.save(encoded_image, "JPEG", quality=88, optimize=True)
     except UnidentifiedImageError as exc:
         raise HTTPException(415, "The uploaded file is not a valid image") from exc
-    old_path = Path(__file__).resolve().parents[2] / (user.avatar_url or "").lstrip("/") if user.avatar_url else None
-    user.avatar_url = f"/uploads/profiles/{filename}"
-    db.commit()
-    if old_path and old_path.is_file() and old_path.parent == PROFILE_IMAGE_DIR:
-        old_path.unlink(missing_ok=True)
-    return {"avatar_url": user.avatar_url}
+    previous_avatar = user.avatar_url
+    avatar_url = save_upload(
+        key=f"profiles/{user.id}/{filename}",
+        content=encoded_image.getvalue(),
+        content_type="image/jpeg",
+        local_path=PROFILE_IMAGE_DIR / filename,
+        local_url=f"/uploads/profiles/{filename}",
+    )
+    user.avatar_url = avatar_url
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        delete_upload(avatar_url, PROFILE_IMAGE_DIR)
+        raise
+    delete_upload(previous_avatar, PROFILE_IMAGE_DIR)
+    return {"avatar_url": resolve_upload_url(avatar_url)}

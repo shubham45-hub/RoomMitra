@@ -1,9 +1,10 @@
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+from app.environment import BACKEND_DIR, load_project_environment
+
+load_project_environment()
 
 
 def _csv_setting(name: str, default: str = "") -> tuple[str, ...]:
@@ -20,8 +21,11 @@ class Settings:
         "ALLOWED_HOSTS", "localhost,127.0.0.1,testserver"
     )
     upload_dir: Path = Path(os.getenv(
-        "UPLOAD_DIR", str(Path(__file__).resolve().parent.parent / "uploads")
+        "UPLOAD_DIR",
+        "/tmp/roommitra-uploads" if os.getenv("VERCEL") == "1"
+        else str(Path(__file__).resolve().parents[1] / "uploads"),
     )).resolve()
+    object_storage_bucket: str = os.getenv("NEON_STORAGE_BUCKET", "assets")
     otp_hmac_secret: str = os.getenv("OTP_HMAC_SECRET", "")
     jwt_secret_key: str = os.getenv("JWT_SECRET_KEY", "")
     jwt_algorithm: str = os.getenv("JWT_ALGORITHM", "HS256")

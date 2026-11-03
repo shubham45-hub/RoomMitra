@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from uuid import uuid4
 import io
 from typing import Literal
@@ -14,6 +13,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from app.config import settings
 from app.database import get_db
 from app.models import Listing, ListingContact, ListingImage, ListingInquiry, ListingReaction, ListingReport, ListingStatus, ListingView, SavedListing, User
+from app.services.object_storage import delete_upload, resolve_upload_url, save_upload
 from app.services.security import get_current_user, get_optional_current_user
 
 router = APIRouter(prefix="/listings", tags=["listings"])
@@ -149,7 +149,7 @@ def serialize(
         "brokerage": listing.brokerage,
         "status": listing.status,
         "owner_name": listing.owner.name,
-        "owner_avatar_url": listing.owner.avatar_url,
+        "owner_avatar_url": resolve_upload_url(listing.owner.avatar_url),
         "created_at": listing.created_at,
         "expires_at": listing.expires_at,
         "is_expired": listing.expires_at <= datetime.now(timezone.utc),
@@ -158,8 +158,8 @@ def serialize(
         "likes_count": likes_count,
         "dislikes_count": dislikes_count,
         "my_reaction": my_reaction,
-        "photo_urls": [image.image_url for image in listing.images],
-        "photos": [{"id": image.id, "image_url": image.image_url, "category": image.category} for image in listing.images],
+        "photo_urls": [resolve_upload_url(image.image_url) for image in listing.images],
+        "photos": [{"id": image.id, "image_url": resolve_upload_url(image.image_url), "category": image.category} for image in listing.images],
     }
 
 
@@ -291,22 +291,28 @@ async def upload_listing_images(
         filename = f"{uuid4().hex}{ALLOWED_IMAGE_FORMATS[image_format]}"
         validated.append((filename, data, category))
 
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    created_paths = []
+    saved_uploads = []
     try:
         for filename, data, category in validated:
-            path = UPLOAD_DIR / filename
-            path.write_bytes(data)
-            created_paths.append(path)
-            db.add(ListingImage(listing_id=listing_id, image_url=f"/uploads/listings/{filename}", category=category))
+            extension = filename.rsplit(".", 1)[-1]
+            content_type = {"jpg": "image/jpeg", "png": "image/png", "webp": "image/webp"}[extension]
+            stored_url = save_upload(
+                key=f"listings/{listing_id}/{filename}",
+                content=data,
+                content_type=content_type,
+                local_path=UPLOAD_DIR / filename,
+                local_url=f"/uploads/listings/{filename}",
+            )
+            saved_uploads.append(stored_url)
+            db.add(ListingImage(listing_id=listing_id, image_url=stored_url, category=category))
         db.commit()
     except Exception:
         db.rollback()
-        for path in created_paths:
-            path.unlink(missing_ok=True)
+        for stored_url in saved_uploads:
+            delete_upload(stored_url, UPLOAD_DIR)
         raise
 
-    return {"photo_urls": [f"/uploads/listings/{filename}" for filename, _, _ in validated]}
+    return {"photo_urls": [resolve_upload_url(value) for value in saved_uploads]}
 
 
 @router.delete("/{listing_id}/images/{image_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -328,10 +334,10 @@ def delete_listing_image(
     if photo is None:
         raise HTTPException(404, "Photo not found")
 
-    path = UPLOAD_DIR / Path(photo.image_url).name
+    stored_url = photo.image_url
     db.delete(photo)
     db.commit()
-    path.unlink(missing_ok=True)
+    delete_upload(stored_url, UPLOAD_DIR)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -872,10 +878,10 @@ def delete_listing(
         raise HTTPException(404, "Listing not found")
     if listing.user_id != user.id:
         raise HTTPException(403, "You can only delete your own listings")
-    image_paths = [UPLOAD_DIR / Path(image.image_url).name for image in listing.images]
+    image_urls = [image.image_url for image in listing.images]
     db.delete(listing)
     db.commit()
-    for path in image_paths:
-        path.unlink(missing_ok=True)
+    for image_url in image_urls:
+        delete_upload(image_url, UPLOAD_DIR)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 

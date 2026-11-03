@@ -22,3 +22,5 @@ backend/uploads/
 .vscode/
 .idea/
 .DS_Store
+.neon
+node_modules/

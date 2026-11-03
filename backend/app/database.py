@@ -1,20 +1,30 @@
 
 import os
-from pathlib import Path
 
-from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-# Load .env from the backend directory
-ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
-load_dotenv(ENV_FILE)
+from app.environment import BACKEND_DIR, load_project_environment
 
-DATABASE_URL = os.getenv("DATABASE_URL")
+load_project_environment()
+
+
+def _sqlalchemy_url(url: str) -> str:
+    """Select the psycopg 3 dialect used by the backend requirements."""
+    if url.startswith("postgres://"):
+        return "postgresql+psycopg://" + url.removeprefix("postgres://")
+    if url.startswith("postgresql://"):
+        return "postgresql+psycopg://" + url.removeprefix("postgresql://")
+    return url
+
+DATABASE_URL = _sqlalchemy_url(os.getenv("DATABASE_URL", ""))
+ALEMBIC_DATABASE_URL = _sqlalchemy_url(
+    os.getenv("DATABASE_URL_UNPOOLED") or DATABASE_URL
+)
 
 if not DATABASE_URL:
     raise RuntimeError(
-        f"DATABASE_URL not found. Check your .env file: {ENV_FILE}"
+        f"DATABASE_URL not found. Set it in the repository or backend environment files (backend: {BACKEND_DIR})."
     )
 
 is_vercel = os.getenv("VERCEL", "").lower() == "1"

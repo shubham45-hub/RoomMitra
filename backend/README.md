@@ -9,7 +9,17 @@
 5. Request a code with `POST /auth/otp/request` and JSON `{"phone":"9876543210"}`. In development, the code is logged by the backend. Verify with `POST /auth/otp/verify` and JSON `{"phone":"9876543210","code":"123456"}`.
 6. Run unit tests with `pytest`.
 
-After OTP verification, users complete their name, email, preferred city, sex, religion, and origin state once. They can optionally upload a profile picture. Browse and filter results use the saved city, while listing audience settings control gender matching; users can update their profile later. Profile pictures are stored locally under `uploads/profiles/` during development.
+After OTP verification, users complete their name, email, preferred city, sex, religion, and origin state once. They can optionally upload a profile picture. Browse and filter results use the saved city, while listing audience settings control gender matching; users can update their profile later. Without Neon Object Storage credentials, photos are stored locally under `uploads/` during development.
+
+## Neon setup
+
+The repository root contains `neon.ts` for the linked production branch. Run `neon deploy` there to apply the declared Neon Auth, private `assets` bucket, and `hello` Function. The CLI writes Neon-managed values to the root `.env`; backend configuration loads root `.env.local`, root `.env`, then `backend/.env` without overwriting values already set by the host. Keep these files private.
+
+The API continues to use SQLAlchemy with psycopg 3. It reads the pooled `DATABASE_URL` for requests and uses `DATABASE_URL_UNPOOLED` for Alembic. A fresh database must be initialized with `python -m alembic upgrade head`; the baseline migration creates the original core tables before the additive feature migrations. Do not use `create_all` to update schema.
+
+When the Neon `AWS_*` variables and `NEON_STORAGE_BUCKET=assets` are available, profile and listing photos use the private Neon Object Storage bucket. The API returns signed read URLs that expire after seven days and deletes uploaded objects when users remove images or accounts. Without those credentials, local development falls back to `UPLOAD_DIR`.
+
+Phone OTP continues to use the existing local provider when `APP_ENV=development`; the code is returned to the UI and no SMS is sent. The Neon Auth service is provisioned on the branch but is not the app's sign-in provider, so it does not replace RoomMitra's existing phone OTP flow. The deployed `hello` Function is a separate Neon service; the FastAPI API remains the app's REST backend.
 
 Each listing has an audience setting: men, women, or anyone. Browse, saved listings, listing details, and contact actions enforce this choice. The audience migration backfills old listings from the lister's sex to preserve their previous visibility where that profile detail exists; listings without it remain visible to anyone.
 
