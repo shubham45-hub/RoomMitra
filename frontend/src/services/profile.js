@@ -17,3 +17,7 @@ export function uploadProfileAvatar(token, image) {
   body.append("image", image);
   return apiRequest("/auth/me/avatar", { token, method: "POST", body });
 }
+
+export function deleteProfile(token) {
+  return apiRequest("/auth/me", { token, method: "DELETE" });
+}

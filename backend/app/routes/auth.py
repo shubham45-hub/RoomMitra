@@ -4,7 +4,7 @@ from pathlib import Path
 import io
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile, status
 from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import desc
@@ -19,6 +19,7 @@ from app.services.security import create_access_token, get_current_user, hash_ot
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 PROFILE_IMAGE_DIR = Path(__file__).resolve().parents[2] / "uploads" / "profiles"
+LISTING_IMAGE_DIR = Path(__file__).resolve().parents[2] / "uploads" / "listings"
 MAX_PROFILE_IMAGE_BYTES = 5 * 1024 * 1024
 PROFILE_IMAGE_FORMATS = {"JPEG": ".jpg", "PNG": ".png", "WEBP": ".webp"}
 
@@ -114,6 +115,29 @@ def verify_otp(body: OtpVerify, db: Session = Depends(get_db)):
 @router.get("/me")
 def read_profile(user: User = Depends(get_current_user)):
     return profile_data(user)
+
+
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+def delete_profile(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    profile_photo = PROFILE_IMAGE_DIR / Path(user.avatar_url or "").name if user.avatar_url else None
+    listing_photos = [
+        LISTING_IMAGE_DIR / Path(photo.image_url).name
+        for listing in user.listings
+        for photo in listing.images
+        if photo.image_url
+    ]
+
+    db.query(OtpChallenge).filter(OtpChallenge.phone == user.phone).delete(synchronize_session=False)
+    db.delete(user)
+    db.commit()
+
+    for path in [profile_photo, *listing_photos]:
+        if path and path.parent in {PROFILE_IMAGE_DIR, LISTING_IMAGE_DIR}:
+            path.unlink(missing_ok=True)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.patch("/me")

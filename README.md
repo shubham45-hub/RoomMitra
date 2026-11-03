@@ -7,6 +7,7 @@ RoomMitra is a room and flatmate listing app built with React, FastAPI, and Post
 - Indian mobile number OTP sign-in with local development delivery
 - First-login setup for name, email, and preferred search city
 - Create, search, edit, pause, mark filled, and save listings; filled homes stay visible with their status
+- Let listers choose whether a room is for men, women, or anyone; matching users can browse and contact it
 - Browse search results in pages with a load-more control
 - Sort listings by newest or monthly rent
 - Search listing titles and descriptions by keyword

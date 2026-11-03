@@ -2,10 +2,17 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { getImageUrl } from "../services/api";
 
-export default function PhotoGallery({ photoUrls = [], title, variant = "card" }) {
+export default function PhotoGallery({ photoUrls = [], photoCategories = [], title, variant = "card" }) {
   const photos = photoUrls.filter(Boolean);
   const [activeIndex, setActiveIndex] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
+  const categoryLabel = {
+    HALL: "Hall",
+    KITCHEN: "Kitchen",
+    WASHROOM: "Washroom",
+    BEDROOM: "Bedroom",
+    OTHER: "Other area",
+  }[photoCategories[activeIndex]];
 
   function showPrevious() {
     setActiveIndex((index) => (index - 1 + photos.length) % photos.length);
@@ -51,6 +58,7 @@ export default function PhotoGallery({ photoUrls = [], title, variant = "card" }
             <button type="button" className="photo-viewer-arrow previous" onClick={showPrevious} aria-label="Previous photo">‹</button>
           )}
           <img src={getImageUrl(photos[activeIndex])} alt={`${title}, photo ${activeIndex + 1} of ${photos.length}`} />
+          {categoryLabel && <span className="photo-viewer-category">{categoryLabel}</span>}
           {photos.length > 1 && (
             <button type="button" className="photo-viewer-arrow next" onClick={showNext} aria-label="Next photo">›</button>
           )}

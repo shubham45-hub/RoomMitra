@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { getImageUrl } from "../services/api";
-import { updateProfile, uploadProfileAvatar } from "../services/profile";
+import { deleteProfile, updateProfile, uploadProfileAvatar } from "../services/profile";
 
 export default function ProfileForm({ profile, token, onSaved, onSignOut, onBack, onboarding = false }) {
   const [name, setName] = useState(
@@ -15,6 +15,8 @@ export default function ProfileForm({ profile, token, onSaved, onSignOut, onBack
   const [avatarPreview, setAvatarPreview] = useState(profile.avatar_url ? getImageUrl(profile.avatar_url) : "");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   async function save(event) {
     event.preventDefault();
@@ -44,9 +46,26 @@ export default function ProfileForm({ profile, token, onSaved, onSignOut, onBack
     }
   }
 
+  async function removeProfile() {
+    setDeleting(true);
+    setMessage("");
+    try {
+      await deleteProfile(token);
+      onSignOut();
+    } catch (error) {
+      setMessage(error.message);
+      setDeleting(false);
+    }
+  }
+
   return (
     <section className={`card profile-card${onboarding ? " is-onboarding" : ""}`}>
       <header className="profile-header">
+        {!onboarding && (
+          <button type="button" className="profile-top-back" onClick={onBack}>
+            <span aria-hidden="true">←</span> Back to listings
+          </button>
+        )}
         <p className="eyebrow">{onboarding ? "WELCOME TO ROOMMITRA" : "YOUR ROOMMITRA PROFILE"}</p>
         <h1>{onboarding ? "Let’s get to know you" : "Your profile"}</h1>
         <p className="profile-intro">
@@ -163,10 +182,39 @@ export default function ProfileForm({ profile, token, onSaved, onSignOut, onBack
       </form>
 
       <div className="profile-footer">
-        {!onboarding && <button className="text-button" onClick={onBack}>Back to listings</button>}
-
-        <button className="text-button" onClick={onSignOut}>Sign out</button>
+        {!onboarding && (
+          <button type="button" className="profile-back-button" onClick={onBack}>
+            <span aria-hidden="true">←</span> Back to listings
+          </button>
+        )}
+        <button type="button" className="profile-signout-button" onClick={onSignOut}>
+          <span aria-hidden="true">↪</span> Sign out
+        </button>
       </div>
+
+      {!onboarding && (
+        <section className="profile-danger-zone">
+          <div>
+            <h2>Delete profile</h2>
+            <p>Permanently remove your account, listings, inquiries, and uploaded photos.</p>
+          </div>
+          {!confirmDelete ? (
+            <button type="button" className="delete-profile-trigger" onClick={() => setConfirmDelete(true)}>
+              Delete profile
+            </button>
+          ) : (
+            <div className="delete-profile-confirm" role="alert">
+              <p>This cannot be undone. You will need to sign up again to use RoomMitra.</p>
+              <div>
+                <button type="button" className="delete-profile-cancel" onClick={() => setConfirmDelete(false)} disabled={deleting}>Cancel</button>
+                <button type="button" className="delete-profile-confirm-button" onClick={removeProfile} disabled={deleting}>
+                  {deleting ? "Deleting…" : "Permanently delete"}
+                </button>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
 
       {message && <p className="message" role="status">{message}</p>}
     </section>

@@ -1,16 +1,16 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import PhotoGallery from "./PhotoGallery";
 import ListingReaction from "./ListingReaction";
 import { getListingContact, recordListingContact, reportListing, sendListingInquiry } from "../services/listings";
 
-export default function ListingDetails({ listing, token, currentUserId, onClose, onContactCountChanged, onReactionChange }) {
-  const [showInquiry, setShowInquiry] = useState(false);
+export default function ListingDetails({ listing, token, currentUserId, onClose, onContactCountChanged, onReactionChange, focusContact = false, initialOwnerContact = null, initialContactError = "" }) {
+  const [showInquiry, setShowInquiry] = useState(focusContact && listing.status === "ACTIVE" && listing.user_id !== currentUserId);
   const [inquiryMessage, setInquiryMessage] = useState("");
   const [sharePhone, setSharePhone] = useState(false);
   const [inquiryStatus, setInquiryStatus] = useState("");
   const [busy, setBusy] = useState(false);
-  const [ownerContact, setOwnerContact] = useState(null);
-  const [contactError, setContactError] = useState("");
+  const [ownerContact, setOwnerContact] = useState(initialOwnerContact);
+  const [contactError, setContactError] = useState(initialContactError);
   const [loadingContact, setLoadingContact] = useState(false);
   const [showReport, setShowReport] = useState(false);
   const [reportReason, setReportReason] = useState("SCAM");
@@ -18,6 +18,8 @@ export default function ListingDetails({ listing, token, currentUserId, onClose,
   const [reportStatus, setReportStatus] = useState("");
   const [reportBusy, setReportBusy] = useState(false);
   const [contactCount, setContactCount] = useState(listing.contacts_total ?? 0);
+  const detailPanelRef = useRef(null);
+  const contactSectionRef = useRef(null);
   const rupees = (amount) =>
     amount == null
       ? "Not specified"
@@ -49,7 +51,7 @@ export default function ListingDetails({ listing, token, currentUserId, onClose,
     }
   }
 
-  async function revealContact() {
+  const revealContact = useCallback(async () => {
     setLoadingContact(true);
     setContactError("");
     try {
@@ -59,7 +61,20 @@ export default function ListingDetails({ listing, token, currentUserId, onClose,
     } finally {
       setLoadingContact(false);
     }
-  }
+  }, [listing.id, token]);
+
+  useEffect(() => {
+    if (!focusContact || listing.status !== "ACTIVE" || listing.user_id === currentUserId) return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      const panel = detailPanelRef.current;
+      const contactSection = contactSectionRef.current;
+      if (panel && contactSection) {
+        const top = panel.scrollTop + contactSection.getBoundingClientRect().top - panel.getBoundingClientRect().top - 20;
+        panel.scrollTo({ top, behavior: "smooth" });
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [currentUserId, focusContact, listing.status, listing.user_id]);
 
   async function trackContact(method) {
     try {
@@ -94,6 +109,7 @@ export default function ListingDetails({ listing, token, currentUserId, onClose,
   const directWhatsappMessage = encodeURIComponent(
     `Hi ${ownerContact?.owner_name}, I found your listing “${listing.title}” on RoomMitra. Is it still available?`,
   );
+  const peopleSharing = (listing.occupants_count ?? 0) + (listing.people_needed ?? listing.available_beds);
 
   return (
     <div className="detail-overlay" onMouseDown={onClose}>
@@ -104,9 +120,16 @@ export default function ListingDetails({ listing, token, currentUserId, onClose,
         aria-labelledby="detail-title"
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <button className="detail-close" onClick={onClose} aria-label="Close">
-          ×
-        </button>
+        <div className="detail-sticky-bar">
+          <button type="button" className="detail-back-button" onClick={onClose}>
+            <span aria-hidden="true">←</span> Back to listings
+          </button>
+          <button type="button" className="detail-close" onClick={onClose} aria-label="Close listing details">
+            ×
+          </button>
+        </div>
+
+        <div className="detail-scroll-content" ref={detailPanelRef}>
 
         <div className="detail-heading">
           <span className="detail-eyebrow">ROOMMITRA LISTING</span>
@@ -120,10 +143,20 @@ export default function ListingDetails({ listing, token, currentUserId, onClose,
             {listing.locality}, {listing.city}
             {listing.pincode ? ` · ${listing.pincode}` : ""}
           </p>
+          <a
+            className="detail-map-link"
+            href={`https://www.openstreetmap.org/search?query=${encodeURIComponent(`${listing.locality}, ${listing.city}`)}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <span className="detail-map-icon" aria-hidden="true">⌖</span>
+            View area map <span className="detail-map-arrow" aria-hidden="true">↗</span>
+          </a>
         </div>
 
         <PhotoGallery
           photoUrls={listing.photo_urls || []}
+          photoCategories={(listing.photos || []).map((photo) => photo.category)}
           title={listing.title}
           variant="details"
         />
@@ -132,8 +165,13 @@ export default function ListingDetails({ listing, token, currentUserId, onClose,
 
         <div className="detail-price-card">
           <div className="detail-rent">
-            <span>Monthly rent</span>
+            <span>{listing.rent_basis === "WHOLE_FLAT" ? "Total monthly rent" : "Monthly rent per person"}</span>
             <strong>{rupees(listing.monthly_rent)}<small> / month</small></strong>
+            {listing.rent_basis === "WHOLE_FLAT" && peopleSharing > 0 && (
+              <small className="detail-rent-split">
+                Approx. {rupees(Math.round(listing.monthly_rent / peopleSharing))} per person if split evenly among {peopleSharing} residents
+              </small>
+            )}
           </div>
           <div className="detail-deposit">
             <span>Security deposit</span>
@@ -149,18 +187,19 @@ export default function ListingDetails({ listing, token, currentUserId, onClose,
         <section className="detail-overview">
           <h3>At a glance</h3>
           <div className="detail-facts">
-            <div><span>Available beds</span><strong>{listing.available_beds}</strong></div>
+            <div><span>People currently living</span><strong>{listing.occupants_count ?? 0}</strong></div>
+            <div><span>People currently required</span><strong>{listing.people_needed ?? listing.available_beds}</strong></div>
             <div><span>Brokerage</span><strong>{rupees(listing.brokerage)}</strong></div>
-            <div><span>Furnishing</span><strong>{listing.is_furnished ? "Furnished" : "Unfurnished"}</strong></div>
+            <div><span>Furnishing</span><strong>{({ FURNISHED: "Furnished", SEMI_FURNISHED: "Semi-furnished", UNFURNISHED: "Unfurnished" })[listing.furnishing_status] || (listing.is_furnished ? "Furnished" : "Unfurnished")}</strong></div>
+            <div><span>Who can rent</span><strong>{{ MALE: "Men", FEMALE: "Women", ANY: "Anyone" }[listing.available_for] || "Anyone"}</strong></div>
             <div><span>Listed by</span><strong>{listing.owner_name}</strong></div>
             <div><span>Viewers in last 24 hours</span><strong>{listing.views_last_day ?? 0}</strong></div>
-            <div><span>People who contacted the lister</span><strong>{contactCount}</strong></div>
             <div><span>People who contacted the lister</span><strong>{contactCount}</strong></div>
           </div>
         </section>
 
         {listing.user_id !== currentUserId && listing.status === "ACTIVE" && (
-          <section className="listing-inquiry-section">
+          <section className="listing-inquiry-section" ref={contactSectionRef}>
             {inquiryStatus && <p className="message" role="status">{inquiryStatus}</p>}
             <div className="direct-contact-panel">
               <div>
@@ -269,6 +308,7 @@ export default function ListingDetails({ listing, token, currentUserId, onClose,
         )}
 
         <button className="detail-done" onClick={onClose}>Back to listings</button>
+        </div>
       </article>
     </div>
   );

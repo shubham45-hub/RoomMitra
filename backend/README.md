@@ -9,7 +9,9 @@
 5. Request a code with `POST /auth/otp/request` and JSON `{"phone":"9876543210"}`. In development, the code is logged by the backend. Verify with `POST /auth/otp/verify` and JSON `{"phone":"9876543210","code":"123456"}`.
 6. Run unit tests with `pytest`.
 
-After OTP verification, users complete their name, email, preferred city, sex, religion, and origin state once. They can optionally upload a profile picture. Browse and filter results use the saved city and show active listings from listers of the same sex; users can update their profile later. Profile pictures are stored locally under `uploads/profiles/` during development.
+After OTP verification, users complete their name, email, preferred city, sex, religion, and origin state once. They can optionally upload a profile picture. Browse and filter results use the saved city, while listing audience settings control gender matching; users can update their profile later. Profile pictures are stored locally under `uploads/profiles/` during development.
+
+Each listing has an audience setting: men, women, or anyone. Browse, saved listings, listing details, and contact actions enforce this choice. The audience migration backfills old listings from the lister's sex to preserve their previous visibility where that profile detail exists; listings without it remain visible to anyone.
 
 ## Local listing moderation
 
@@ -28,5 +30,9 @@ Each listing also shows its total unique contacts: users who sent an inquiry or 
 Signed-in users can like or dislike listings they do not own. Each person has one reaction per listing; clicking the same reaction again removes it, and choosing the other reaction switches their vote. The listing owner sees both totals but cannot vote on their own listing.
 
 Migrations preserve existing rows. Do not create or alter tables with SQLAlchemy `create_all`; use Alembic. Listing photos are stored locally under `uploads/` during development and are ignored by Git. Enquiries are stored in PostgreSQL, and the sender must consent to share their verified phone number before the lister can reply.
+
+Listings support up to 12 photos each. The upload form groups them by hall, kitchen, washroom, bedroom, and other areas; existing listings' photos are kept and categorized as other areas when the photo-category migration is applied.
+
+Each listing records whether its rent is per person or for the whole flat. For whole-flat rent, the app displays an approximate equal split across current residents and incoming flatmates.
 
 The SMS provider class is an integration seam only; production delivery must be implemented before setting `APP_ENV` outside development.

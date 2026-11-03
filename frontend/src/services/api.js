@@ -5,7 +5,7 @@ export function getImageUrl(path) {
   return path ? new URL(path, API_URL).toString() : "";
 }
 
-export async function apiRequest(path, { token, ...options } = {}) {
+export async function apiRequest(path, { token, onResponse, ...options } = {}) {
   const headers = new Headers(options.headers || {});
 
   if (options.body && !(options.body instanceof FormData) && !headers.has("Content-Type")) {
@@ -20,6 +20,8 @@ export async function apiRequest(path, { token, ...options } = {}) {
     ...options,
     headers,
   });
+
+  onResponse?.(response);
 
   const data = await response.json().catch(() => ({}));
 

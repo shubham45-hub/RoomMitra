@@ -21,7 +21,20 @@ export default function App() {
     if (!token) return;
 
     getProfile(token)
-      .then(setProfile)
+      .then((loadedProfile) => {
+        setProfile((currentProfile) => {
+          if (!currentProfile) return loadedProfile;
+          const merged = { ...currentProfile, ...loadedProfile };
+          // Keep profile fields from OTP verification if a briefly stale API
+          // response does not include fields added by a newer backend version.
+          for (const key of ["email", "preferred_city", "sex", "religion", "origin_state", "avatar_url"]) {
+            if (loadedProfile[key] == null && currentProfile[key] != null) {
+              merged[key] = currentProfile[key];
+            }
+          }
+          return merged;
+        });
+      })
       .catch(() => {
         sessionStorage.removeItem(TOKEN_KEY);
         setToken(null);
@@ -124,6 +137,7 @@ export default function App() {
     <ListingsPage
       token={token}
       userId={profile.id}
+      profile={profile}
       preferredCity={profile.preferred_city}
       onProfile={() => setScreen("profile")}
       onMyListings={() => setScreen("my-listings")}

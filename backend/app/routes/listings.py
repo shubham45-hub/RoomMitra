@@ -4,7 +4,7 @@ from uuid import uuid4
 import io
 from typing import Literal
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
 from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import case, func, or_
@@ -18,8 +18,15 @@ from app.services.security import get_current_user, get_optional_current_user
 router = APIRouter(prefix="/listings", tags=["listings"])
 UPLOAD_DIR = Path(__file__).resolve().parents[2] / "uploads" / "listings"
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
-MAX_LISTING_IMAGES = 6
+MAX_LISTING_IMAGES = 12
 ALLOWED_IMAGE_FORMATS = {"JPEG": ".jpg", "PNG": ".png", "WEBP": ".webp"}
+LISTING_IMAGE_CATEGORIES = {"HALL", "KITCHEN", "WASHROOM", "BEDROOM", "OTHER"}
+
+
+def allowed_listing_audiences(user: User) -> list[str]:
+    if user.sex in {"male", "female"}:
+        return [user.sex.upper(), "ANY"]
+    return ["ANY"]
 
 
 class ListingCreate(BaseModel):
@@ -30,9 +37,13 @@ class ListingCreate(BaseModel):
     pincode: str | None = Field(default=None, pattern=r"^\d{6}$")
     flat_type: str = Field(min_length=2, max_length=20)
     available_beds: int = Field(default=1, ge=1, le=20)
+    occupants_count: int = Field(default=0, ge=0, le=20)
     monthly_rent: int = Field(gt=0)
+    rent_basis: Literal["PER_PERSON", "WHOLE_FLAT"] = "PER_PERSON"
     security_deposit: int | None = Field(default=None, ge=0)
     is_furnished: bool = False
+    furnishing_status: Literal["FURNISHED", "SEMI_FURNISHED", "UNFURNISHED"] | None = None
+    available_for: Literal["MALE", "FEMALE", "ANY"] = "ANY"
     brokerage: int = Field(default=0, ge=0)
 
 
@@ -44,9 +55,13 @@ class ListingUpdate(BaseModel):
     pincode: str | None = Field(default=None, pattern=r"^\d{6}$")
     flat_type: str | None = Field(default=None, min_length=2, max_length=20)
     available_beds: int | None = Field(default=None, ge=1, le=20)
+    occupants_count: int | None = Field(default=None, ge=0, le=20)
     monthly_rent: int | None = Field(default=None, gt=0)
+    rent_basis: Literal["PER_PERSON", "WHOLE_FLAT"] | None = None
     security_deposit: int | None = Field(default=None, ge=0)
     is_furnished: bool | None = None
+    furnishing_status: Literal["FURNISHED", "SEMI_FURNISHED", "UNFURNISHED"] | None = None
+    available_for: Literal["MALE", "FEMALE", "ANY"] | None = None
     brokerage: int | None = Field(default=None, ge=0)
     status: ListingStatus | None = None
 
@@ -80,9 +95,14 @@ class ListingOut(BaseModel):
     pincode: str | None
     flat_type: str
     available_beds: int
+    occupants_count: int
+    people_needed: int
     monthly_rent: int
+    rent_basis: str
     security_deposit: int | None
     is_furnished: bool
+    furnishing_status: str
+    available_for: str
     brokerage: int
     status: ListingStatus
     owner_name: str
@@ -117,9 +137,14 @@ def serialize(
         "pincode": listing.pincode,
         "flat_type": listing.flat_type,
         "available_beds": listing.available_beds,
+        "occupants_count": listing.occupants_count,
+        "people_needed": listing.available_beds,
         "monthly_rent": listing.monthly_rent,
+        "rent_basis": listing.rent_basis,
         "security_deposit": listing.security_deposit,
         "is_furnished": listing.is_furnished,
+        "furnishing_status": listing.furnishing_status,
+        "available_for": listing.available_for,
         "brokerage": listing.brokerage,
         "status": listing.status,
         "owner_name": listing.owner.name,
@@ -133,7 +158,7 @@ def serialize(
         "dislikes_count": dislikes_count,
         "my_reaction": my_reaction,
         "photo_urls": [image.image_url for image in listing.images],
-        "photos": [{"id": image.id, "image_url": image.image_url} for image in listing.images],
+        "photos": [{"id": image.id, "image_url": image.image_url, "category": image.category} for image in listing.images],
     }
 
 
@@ -225,6 +250,7 @@ def upsert_listing_contact(db: Session, listing_id: int, user_id: int, contacted
 async def upload_listing_images(
     listing_id: int,
     files: list[UploadFile] = File(...),
+    categories: list[str] = Form(default=[]),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -238,9 +264,14 @@ async def upload_listing_images(
     current_count = db.query(ListingImage).filter(ListingImage.listing_id == listing_id).count()
     if current_count + len(files) > MAX_LISTING_IMAGES:
         raise HTTPException(400, f"A listing can have up to {MAX_LISTING_IMAGES} photos")
+    if categories and len(categories) != len(files):
+        raise HTTPException(422, "Provide one photo category for each uploaded image")
+    photo_categories = [category.upper() for category in categories] if categories else ["OTHER"] * len(files)
+    if any(category not in LISTING_IMAGE_CATEGORIES for category in photo_categories):
+        raise HTTPException(422, "Photo category must be Hall, Kitchen, Washroom, Bedroom, or Other")
 
     validated = []
-    for file in files:
+    for file, category in zip(files, photo_categories):
         data = await file.read(MAX_IMAGE_BYTES + 1)
         if len(data) > MAX_IMAGE_BYTES:
             raise HTTPException(413, "Each photo must be 5 MB or smaller")
@@ -257,16 +288,16 @@ async def upload_listing_images(
         if image_format not in ALLOWED_IMAGE_FORMATS:
             raise HTTPException(400, "Photos must be JPEG, PNG, or WebP images")
         filename = f"{uuid4().hex}{ALLOWED_IMAGE_FORMATS[image_format]}"
-        validated.append((filename, data))
+        validated.append((filename, data, category))
 
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     created_paths = []
     try:
-        for filename, data in validated:
+        for filename, data, category in validated:
             path = UPLOAD_DIR / filename
             path.write_bytes(data)
             created_paths.append(path)
-            db.add(ListingImage(listing_id=listing_id, image_url=f"/uploads/listings/{filename}"))
+            db.add(ListingImage(listing_id=listing_id, image_url=f"/uploads/listings/{filename}", category=category))
         db.commit()
     except Exception:
         db.rollback()
@@ -274,7 +305,7 @@ async def upload_listing_images(
             path.unlink(missing_ok=True)
         raise
 
-    return {"photo_urls": [f"/uploads/listings/{filename}" for filename, _ in validated]}
+    return {"photo_urls": [f"/uploads/listings/{filename}" for filename, _, _ in validated]}
 
 
 @router.delete("/{listing_id}/images/{image_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -314,7 +345,7 @@ def create_listing_inquiry(
         Listing.id == listing_id,
         Listing.status == ListingStatus.ACTIVE,
         Listing.expires_at > datetime.now(timezone.utc),
-        Listing.owner.has(User.sex == user.sex),
+        Listing.available_for.in_(allowed_listing_audiences(user)),
     ).first()
     if listing is None:
         raise HTTPException(404, "Listing not found")
@@ -414,7 +445,7 @@ def get_listing_contact(
             Listing.id == listing_id,
             Listing.status == ListingStatus.ACTIVE,
             Listing.expires_at > datetime.now(timezone.utc),
-            Listing.owner.has(User.sex == user.sex),
+            Listing.available_for.in_(allowed_listing_audiences(user)),
         )
         .first()
     )
@@ -438,7 +469,7 @@ def record_listing_contact_action(
         Listing.id == listing_id,
         Listing.status == ListingStatus.ACTIVE,
         Listing.expires_at > datetime.now(timezone.utc),
-        Listing.owner.has(User.sex == user.sex),
+        Listing.available_for.in_(allowed_listing_audiences(user)),
     ).first()
     if listing is None:
         raise HTTPException(404, "Listing not found")
@@ -461,7 +492,7 @@ def react_to_listing(
         Listing.id == listing_id,
         Listing.status == ListingStatus.ACTIVE,
         Listing.expires_at > datetime.now(timezone.utc),
-        Listing.owner.has(User.sex == user.sex),
+        Listing.available_for.in_(allowed_listing_audiences(user)),
     ).first()
     if listing is None:
         raise HTTPException(404, "Listing not found")
@@ -503,7 +534,7 @@ def report_listing(
         Listing.id == listing_id,
         Listing.status == ListingStatus.ACTIVE,
         Listing.expires_at > datetime.now(timezone.utc),
-        Listing.owner.has(User.sex == user.sex),
+        Listing.available_for.in_(allowed_listing_audiences(user)),
     ).first()
     if listing is None:
         raise HTTPException(404, "Listing not found")
@@ -542,8 +573,14 @@ def create_listing(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    values = data.model_dump()
+    furnishing_status = values.get("furnishing_status") or (
+        "FURNISHED" if values.get("is_furnished") else "UNFURNISHED"
+    )
+    values["furnishing_status"] = furnishing_status
+    values["is_furnished"] = furnishing_status == "FURNISHED"
     listing = Listing(
-        **data.model_dump(),
+        **values,
         user_id=user.id,
         status=ListingStatus.ACTIVE,
         expires_at=datetime.now(timezone.utc) + timedelta(days=30),
@@ -564,9 +601,12 @@ def browse_listings(
     min_rent: int | None = Query(default=None, ge=1),
     max_rent: int | None = Query(default=None, ge=1),
     min_beds: int | None = Query(default=None, ge=1, le=20),
+    furnishing_status: Literal["FURNISHED", "SEMI_FURNISHED", "UNFURNISHED"] | None = Query(default=None),
+    availability: Literal["AVAILABLE", "FILLED"] | None = Query(default=None),
     sort: Literal["newest", "rent_low", "rent_high"] = Query(default="newest"),
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    response: Response = None,
     db: Session = Depends(get_db),
     user: User | None = Depends(get_optional_current_user),
 ):
@@ -575,6 +615,7 @@ def browse_listings(
     has_other_filters = any(value and value.strip() for value in (keyword, flat_type, locality)) or any(
         value is not None for value in (min_rent, max_rent, min_beds)
     )
+    has_other_filters = has_other_filters or furnishing_status is not None or availability is not None
     if has_other_filters and not city_name:
         raise HTTPException(422, "Enter a city before using the other filters")
     query = db.query(Listing).options(joinedload(Listing.owner), selectinload(Listing.images)).filter(
@@ -582,7 +623,10 @@ def browse_listings(
         Listing.expires_at > datetime.now(timezone.utc),
     )
     if user:
-        query = query.filter(Listing.owner.has(User.sex == user.sex))
+        query = query.filter(
+            Listing.user_id != user.id,
+            Listing.available_for.in_(allowed_listing_audiences(user)),
+        )
     if city_name:
         query = query.filter(Listing.city.ilike(city_name))
     if keyword:
@@ -604,11 +648,20 @@ def browse_listings(
         query = query.filter(Listing.monthly_rent <= max_rent)
     if min_beds is not None:
         query = query.filter(Listing.available_beds >= min_beds)
+    if furnishing_status:
+        query = query.filter(Listing.furnishing_status == furnishing_status)
+    if availability == "AVAILABLE":
+        query = query.filter(Listing.status == ListingStatus.ACTIVE)
+    elif availability == "FILLED":
+        query = query.filter(Listing.status == ListingStatus.FILLED)
     sort_columns = {
         "newest": (case((Listing.status == ListingStatus.ACTIVE, 0), else_=1), Listing.created_at.desc(), Listing.id.desc()),
         "rent_low": (case((Listing.status == ListingStatus.ACTIVE, 0), else_=1), Listing.monthly_rent.asc(), Listing.created_at.desc(), Listing.id.desc()),
         "rent_high": (case((Listing.status == ListingStatus.ACTIVE, 0), else_=1), Listing.monthly_rent.desc(), Listing.created_at.desc(), Listing.id.desc()),
     }
+    total_count = query.order_by(None).count()
+    if response is not None:
+        response.headers["X-Total-Count"] = str(total_count)
     listings = query.order_by(*sort_columns[sort]).offset(offset).limit(limit).all()
     return serialize_many(db, listings, user.id if user else None)
 
@@ -639,7 +692,7 @@ def get_saved_listings(
             SavedListing.user_id == user.id,
             Listing.status == ListingStatus.ACTIVE,
             Listing.expires_at > datetime.now(timezone.utc),
-            Listing.owner.has(User.sex == user.sex),
+            Listing.available_for.in_(allowed_listing_audiences(user)),
         )
         .order_by(SavedListing.created_at.desc())
         .all()
@@ -657,7 +710,7 @@ def save_listing(
         Listing.id == listing_id,
         Listing.status == ListingStatus.ACTIVE,
         Listing.expires_at > datetime.now(timezone.utc),
-        Listing.owner.has(User.sex == user.sex),
+        Listing.available_for.in_(allowed_listing_audiences(user)),
     ).first()
 
     if listing is None:
@@ -703,7 +756,7 @@ def get_listing(
         listing is None
         or listing.status not in {ListingStatus.ACTIVE, ListingStatus.FILLED}
         or listing.expires_at <= datetime.now(timezone.utc)
-        or (user is not None and listing.owner.sex != user.sex)
+        or (user is not None and listing.available_for not in allowed_listing_audiences(user))
     ):
         raise HTTPException(404, "Listing not found")
     reaction = get_reaction_summaries(db, [listing], user.id if user else None).get(
@@ -765,6 +818,10 @@ def update_listing(
     if listing.user_id != user.id:
         raise HTTPException(403, "You can only edit your own listings")
     update_values = updates.model_dump(exclude_unset=True)
+    if update_values.get("furnishing_status") is not None:
+        update_values["is_furnished"] = update_values["furnishing_status"] == "FURNISHED"
+    elif "is_furnished" in update_values and update_values["is_furnished"] is not None:
+        update_values["furnishing_status"] = "FURNISHED" if update_values["is_furnished"] else "UNFURNISHED"
     if update_values.get("status") == ListingStatus.ACTIVE and listing.expires_at <= datetime.now(timezone.utc):
         raise HTTPException(409, "This listing has expired. Renew it to publish it again.")
     for key, value in update_values.items():

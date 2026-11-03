@@ -2,6 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import { createListing, uploadListingImages } from "../services/listings";
 import LocalityAutocomplete from "./LocalityAutocomplete";
 
+const photoCategories = [
+  ["HALL", "Hall"],
+  ["KITCHEN", "Kitchen"],
+  ["WASHROOM", "Washroom"],
+  ["BEDROOM", "Bedroom"],
+  ["OTHER", "Other areas"],
+];
+
 const initialForm = {
   title: "",
   description: "",
@@ -10,18 +18,23 @@ const initialForm = {
   pincode: "",
   flat_type: "",
   available_beds: "1",
+  occupants_count: "0",
   monthly_rent: "",
+  rent_basis: "PER_PERSON",
   security_deposit: "",
-  is_furnished: false,
+  deposit_same_as_rent: false,
+  furnishing_status: "UNFURNISHED",
+  available_for: "ANY",
   brokerage: "0",
 };
 
-function emptyForm(preferredCity) {
-  return { ...initialForm, city: preferredCity || "" };
+function emptyForm(preferredCity, profileSex) {
+  const defaultAudience = profileSex === "male" ? "MALE" : profileSex === "female" ? "FEMALE" : "ANY";
+  return { ...initialForm, city: preferredCity || "", available_for: defaultAudience };
 }
 
-export default function CreateListingForm({ token, preferredCity, onCreated, onCancel }) {
-  const [form, setForm] = useState(() => emptyForm(preferredCity));
+export default function CreateListingForm({ token, preferredCity, profileSex, onCreated, onCancel }) {
+  const [form, setForm] = useState(() => emptyForm(preferredCity, profileSex));
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [photos, setPhotos] = useState([]);
@@ -33,12 +46,38 @@ export default function CreateListingForm({ token, preferredCity, onCreated, onC
     return () => previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
   }, []);
 
-  function choosePhotos(selected) {
+  function clearPhotos() {
     previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
-    const urls = selected.map((photo) => URL.createObjectURL(photo));
-    previewUrlsRef.current = urls;
-    setPreviewUrls(urls);
-    setPhotos(selected);
+    previewUrlsRef.current = [];
+    setPreviewUrls([]);
+    setPhotos([]);
+  }
+
+  function choosePhotos(category, selected) {
+    const otherPhotos = photos.filter((photo) => photo.category !== category);
+    if (otherPhotos.length + selected.length > 12) {
+      setPhotoError(`A listing can have up to 12 photos. You can add ${12 - otherPhotos.length} more.`);
+      return;
+    }
+    photos.filter((photo) => photo.category === category).forEach((photo) => {
+      URL.revokeObjectURL(photo.previewUrl);
+      previewUrlsRef.current = previewUrlsRef.current.filter((url) => url !== photo.previewUrl);
+    });
+    const added = selected.map((file) => ({ file, category, previewUrl: URL.createObjectURL(file) }));
+    previewUrlsRef.current.push(...added.map((photo) => photo.previewUrl));
+    const next = [...otherPhotos, ...added];
+    setPhotos(next);
+    setPreviewUrls(next.map((photo) => photo.previewUrl));
+    setPhotoError("");
+  }
+
+  function removeSelectedPhoto(photo) {
+    URL.revokeObjectURL(photo.previewUrl);
+    previewUrlsRef.current = previewUrlsRef.current.filter((url) => url !== photo.previewUrl);
+    const next = photos.filter((item) => item.previewUrl !== photo.previewUrl);
+    setPhotos(next);
+    setPreviewUrls(next.map((item) => item.previewUrl));
+    setPhotoError("");
   }
 
   function update(event) {
@@ -49,20 +88,30 @@ export default function CreateListingForm({ token, preferredCity, onCreated, onC
     }));
   }
 
+  const keyPhotoAreas = photoCategories.slice(0, 4).map(([category, label]) => ({
+    category,
+    label,
+    covered: photos.some((photo) => photo.category === category),
+  }));
+  const coveredPhotoAreas = keyPhotoAreas.filter((area) => area.covered).length;
+
   async function submit(event) {
     event.preventDefault();
     setBusy(true);
     setMessage("");
 
     try {
+      const { deposit_same_as_rent, ...listingFields } = form;
       const created = await createListing(token, {
-        ...form,
+        ...listingFields,
         pincode: form.pincode.trim() || null,
         available_beds: Number(form.available_beds),
+        occupants_count: Number(form.occupants_count),
         monthly_rent: Number(form.monthly_rent),
-        security_deposit: form.security_deposit
-          ? Number(form.security_deposit)
-          : null,
+        security_deposit: deposit_same_as_rent
+          ? Number(form.monthly_rent)
+          : form.security_deposit ? Number(form.security_deposit) : null,
+        is_furnished: form.furnishing_status === "FURNISHED",
         brokerage: Number(form.brokerage || 0),
       });
 
@@ -70,8 +119,8 @@ export default function CreateListingForm({ token, preferredCity, onCreated, onC
         try {
           await uploadListingImages(token, created.id, photos);
         } catch (uploadError) {
-          setForm(emptyForm(preferredCity));
-          choosePhotos([]);
+          setForm(emptyForm(preferredCity, profileSex));
+          clearPhotos();
           onCreated(
             created,
             `Your listing was published, but its photos could not be uploaded: ${uploadError.message}`,
@@ -80,8 +129,8 @@ export default function CreateListingForm({ token, preferredCity, onCreated, onC
         }
       }
 
-      setForm(emptyForm(preferredCity));
-      choosePhotos([]);
+      setForm(emptyForm(preferredCity, profileSex));
+      clearPhotos();
       onCreated(created);
     } catch (error) {
       setMessage(error.message);
@@ -96,13 +145,19 @@ export default function CreateListingForm({ token, preferredCity, onCreated, onC
         <div>
           <p className="eyebrow">YOUR NEXT ROOMMATE</p>
           <h2>Post a listing</h2>
+          <p className="create-listing-subtitle">A few clear details help the right flatmate find your place.</p>
         </div>
-        <button type="button" className="close-form" onClick={onCancel}>
-          Close
+        <button type="button" className="close-form" onClick={onCancel} aria-label="Close listing form">
+          <span aria-hidden="true">×</span> Close
         </button>
       </div>
 
       <form className="listing-form" onSubmit={submit}>
+        <section className="listing-form-section">
+          <div className="listing-section-heading">
+            <span className="listing-section-number">01</span>
+            <div><h3>About the space</h3><p>Give your room a clear title and description.</p></div>
+          </div>
         <label>
           Listing title
           <input
@@ -131,35 +186,56 @@ export default function CreateListingForm({ token, preferredCity, onCreated, onC
         </label>
 
         <div className="listing-photo-field">
-          <label htmlFor="listing-photos">Room and flat photos (up to 6)</label>
-          <input
-            id="listing-photos"
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            multiple
-            onChange={(event) => {
-              const selected = Array.from(event.target.files || []);
-              if (selected.length > 6) {
-                setPhotoError("Choose up to 6 photos.");
-                event.target.value = "";
-                choosePhotos([]);
-                return;
-              }
-              setPhotoError("");
-              choosePhotos(selected);
-            }}
-          />
-          <p className="photo-help">JPEG, PNG, or WebP. Each photo must be 5 MB or smaller.</p>
+          <p className="photo-field-title">Add photos of the flat <span>Optional · up to 12 photos total</span></p>
+          <p className="photo-help">Add clear photos of each area so flatmates can see the space.</p>
+          <div className="photo-coverage" aria-label={`${coveredPhotoAreas} of 4 key photo areas covered`}>
+            <strong>Key area coverage <span>{coveredPhotoAreas}/4</span></strong>
+            <div>
+              {keyPhotoAreas.map((area) => (
+                <span className={area.covered ? "is-covered" : ""} key={area.category}>
+                  <span aria-hidden="true">{area.covered ? "✓" : "＋"}</span>{area.label}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="listing-photo-categories">
+            {photoCategories.map(([category, label]) => (
+              <label key={category}>
+                {label}
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  multiple
+                  onChange={(event) => {
+                    choosePhotos(category, Array.from(event.target.files || []));
+                    event.target.value = "";
+                  }}
+                />
+                <small>{photos.filter((photo) => photo.category === category).length} selected</small>
+              </label>
+            ))}
+          </div>
+          <p className="photo-help">JPEG, PNG, or WebP. Each photo must be 5 MB or smaller. Total: {photos.length}/12.</p>
           {photoError && <p className="message" role="alert">{photoError}</p>}
           {previewUrls.length > 0 && (
             <div className="photo-preview-grid">
-              {previewUrls.map((url, index) => (
-                <img src={url} alt={`Selected room photo ${index + 1}`} key={url} />
+              {photos.map((photo, index) => (
+                <div className="photo-preview-item" key={photo.previewUrl}>
+                  <img src={photo.previewUrl} alt={`${photoCategories.find(([category]) => category === photo.category)?.[1]} photo ${index + 1}`} />
+                  <small>{photoCategories.find(([category]) => category === photo.category)?.[1]}</small>
+                  <button type="button" className="photo-preview-remove" onClick={() => removeSelectedPhoto(photo)} aria-label={`Remove ${photoCategories.find(([category]) => category === photo.category)?.[1]} photo ${index + 1}`}>Remove</button>
+                </div>
               ))}
             </div>
           )}
         </div>
+        </section>
 
+        <section className="listing-form-section">
+          <div className="listing-section-heading">
+            <span className="listing-section-number">02</span>
+            <div><h3>Where is it?</h3><p>Set the location so people can find nearby homes.</p></div>
+          </div>
         <div className="listing-form-row">
           <label>
             City
@@ -207,16 +283,34 @@ export default function CreateListingForm({ token, preferredCity, onCreated, onC
             />
           </label>
         </div>
+        </section>
 
+        <section className="listing-form-section">
+          <div className="listing-section-heading">
+            <span className="listing-section-number">03</span>
+            <div><h3>Rent and availability</h3><p>Be upfront about the monthly cost and what is included.</p></div>
+          </div>
         <div className="listing-form-row listing-form-numbers">
           <label>
-            Available beds
+            People currently required
             <input
               name="available_beds"
               type="number"
               min="1"
               max="20"
               value={form.available_beds}
+              onChange={update}
+              required
+            />
+          </label>
+          <label>
+            People currently living in the flat
+            <input
+              name="occupants_count"
+              type="number"
+              min="0"
+              max="20"
+              value={form.occupants_count}
               onChange={update}
               required
             />
@@ -235,18 +329,24 @@ export default function CreateListingForm({ token, preferredCity, onCreated, onC
           </label>
         </div>
 
-        <div className="listing-form-row">
-          <label>
-            Security deposit (₹)
+        <div className="listing-form-row listing-form-numbers">
+          <div className="deposit-field">
+            <label htmlFor="security-deposit">Security deposit (₹)</label>
             <input
+              id="security-deposit"
               name="security_deposit"
               type="number"
               min="0"
-              value={form.security_deposit}
+              value={form.deposit_same_as_rent ? form.monthly_rent : form.security_deposit}
+              disabled={form.deposit_same_as_rent}
               onChange={update}
               placeholder="Optional"
             />
-          </label>
+            <label className="deposit-match-option">
+              <input name="deposit_same_as_rent" type="checkbox" checked={form.deposit_same_as_rent} onChange={update} />
+              Same as monthly rent
+            </label>
+          </div>
           <label>
             Brokerage (₹)
             <input
@@ -257,23 +357,53 @@ export default function CreateListingForm({ token, preferredCity, onCreated, onC
               onChange={update}
             />
           </label>
+          <label>
+            Rent applies to
+            <select name="rent_basis" value={form.rent_basis} onChange={update}>
+              <option value="PER_PERSON">Each person</option>
+              <option value="WHOLE_FLAT">Whole flat</option>
+            </select>
+          </label>
         </div>
+        </section>
 
-        <label className="furnished-option">
-          <input
-            name="is_furnished"
-            type="checkbox"
-            checked={form.is_furnished}
-            onChange={update}
-          />
-          <span>The room is furnished</span>
-        </label>
+        <fieldset className="furnishing-options">
+          <legend>Furnishing</legend>
+          {[
+            ["FURNISHED", "Furnished"],
+            ["SEMI_FURNISHED", "Semi-furnished"],
+            ["UNFURNISHED", "Unfurnished"],
+          ].map(([value, label]) => (
+            <label className="furnishing-choice" key={value}>
+              <input type="radio" name="furnishing_status" value={value} checked={form.furnishing_status === value} onChange={update} />
+              <span>{label}</span>
+            </label>
+          ))}
+        </fieldset>
+
+        <fieldset className="listing-audience-options">
+          <legend>Who can rent this room?</legend>
+          <p>Choose who should see and contact you about this listing.</p>
+          {[
+            ["MALE", "Men"],
+            ["FEMALE", "Women"],
+            ["ANY", "Anyone"],
+          ].map(([value, label]) => (
+            <label className="listing-audience-choice" key={value}>
+              <input type="radio" name="available_for" value={value} checked={form.available_for === value} onChange={update} />
+              <span>{label}</span>
+            </label>
+          ))}
+        </fieldset>
 
         {message && <p className="message" role="alert">{message}</p>}
 
-        <button className="publish-button" disabled={busy}>
-          {busy ? "Publishing…" : "Publish listing"}
-        </button>
+        <div className="listing-submit-bar">
+          <p>Your listing will be visible to flatmates in {form.city || "your selected city"}.</p>
+          <button className="publish-button" disabled={busy}>
+            {busy ? "Publishing…" : "Publish listing"}<span aria-hidden="true">→</span>
+          </button>
+        </div>
       </form>
     </section>
   );

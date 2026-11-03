@@ -94,17 +94,22 @@ export default function MyListingsPage({ token, userId, onBack }) {
 
   return (
     <main className="my-listings-page">
-      <button className="back-button" onClick={onBack}>
-        ← Back to listings
-      </button>
+      <header className="my-listings-toolbar">
+        <div className="my-listings-toolbar-inner">
+          <button type="button" className="back-button" onClick={onBack}>
+            <span aria-hidden="true">←</span> Back to listings
+          </button>
+        </div>
+      </header>
 
-      <p className="eyebrow">YOUR ROOMMITRA POSTS</p>
-      <h1>My listings</h1>
-      <p className="my-listings-intro">
-        Manage the listings you have shared with the community.
-      </p>
+      <div className="my-listings-content">
+        <p className="eyebrow">YOUR ROOMMITRA POSTS</p>
+        <h1>My listings</h1>
+        <p className="my-listings-intro">
+          Manage the listings you have shared with the community.
+        </p>
 
-      {message && <p className="message" role="status">{message}</p>}
+        {message && <p className="message" role="status">{message}</p>}
 
       {listings.length === 0 ? (
         <div className="empty-state">
@@ -133,6 +138,7 @@ export default function MyListingsPage({ token, userId, onBack }) {
                 <>
                 <PhotoGallery
                   photoUrls={listing.photo_urls || []}
+                  photoCategories={(listing.photos || []).map((photo) => photo.category)}
                   title={listing.title}
                   variant="my-listing"
                 />
@@ -199,7 +205,8 @@ export default function MyListingsPage({ token, userId, onBack }) {
             </article>
           ))}
         </div>
-      )}
+        )}
+      </div>
     </main>
   );
 }

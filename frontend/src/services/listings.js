@@ -9,9 +9,12 @@ export function getListings({
   minRent = "",
   maxRent = "",
   minBeds = "",
+  furnishingStatus = "",
+  availability = "",
   sort = "newest",
   limit = 20,
   offset = 0,
+  onTotalCount,
 } = {}) {
   const params = new URLSearchParams();
 
@@ -22,12 +25,23 @@ export function getListings({
   if (minRent) params.set("min_rent", minRent);
   if (maxRent) params.set("max_rent", maxRent);
   if (minBeds) params.set("min_beds", minBeds);
+  if (furnishingStatus) params.set("furnishing_status", furnishingStatus);
+  if (availability) params.set("availability", availability);
   params.set("sort", sort);
   params.set("limit", String(limit));
   params.set("offset", String(offset));
 
   const query = params.toString();
-  return apiRequest(`/listings${query ? `?${query}` : ""}`, { token });
+  return apiRequest(`/listings${query ? `?${query}` : ""}`, {
+    token,
+    onResponse: (response) => {
+      const headerValue = response.headers.get("X-Total-Count");
+      if (headerValue !== null) {
+        const total = Number(headerValue);
+        if (Number.isFinite(total)) onTotalCount?.(total);
+      }
+    },
+  });
 }
 
 export function createListing(token, listing) {
@@ -40,7 +54,10 @@ export function createListing(token, listing) {
 
 export function uploadListingImages(token, id, files) {
   const body = new FormData();
-  files.forEach((file) => body.append("files", file));
+  files.forEach((photo) => {
+    body.append("files", photo.file || photo);
+    body.append("categories", photo.category || "OTHER");
+  });
   return apiRequest(`/listings/${id}/images`, {
     token,
     method: "POST",
