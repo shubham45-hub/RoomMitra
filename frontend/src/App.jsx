@@ -9,12 +9,14 @@ import ModerationPage from "./components/ModerationPage";
 import PublicInfoPage from "./components/PublicInfoPage";
 import SiteFooter from "./components/SiteFooter";
 import { getModerationAccess } from "./services/listings";
+import DemoPreview from "./components/DemoPreview";
 import "./App.css";
 
 const TOKEN_KEY = "roommitra_token";
+const IS_DEMO_PREVIEW = new URLSearchParams(window.location.search).get("demo") === "1";
 
 export default function App() {
-  const [token, setToken] = useState(() => sessionStorage.getItem(TOKEN_KEY));
+  const [token, setToken] = useState(() => IS_DEMO_PREVIEW ? null : sessionStorage.getItem(TOKEN_KEY));
   const [profile, setProfile] = useState(null);
   const [screen, setScreen] = useState("listings");
   const [publicPage, setPublicPage] = useState(null);
@@ -72,6 +74,8 @@ export default function App() {
     setProfile(null);
     setCanModerate(false);
   }
+
+  if (IS_DEMO_PREVIEW) return <DemoPreview />;
 
   if (publicPage) {
     return (

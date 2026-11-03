@@ -58,3 +58,15 @@ The repository now includes production Dockerfiles, an Nginx SPA server, and a C
 4. Check `https://roommitra.example.com`, `https://api.roommitra.example.com/health`, and sign-in, uploads, account deletion, and moderation. Update the frontend image whenever `VITE_API_BASE_URL` changes because Vite embeds it at build time.
 
 The sample values are placeholders. Production startup deliberately fails without exact CORS/host settings, strong secrets, and the already-configured production SMS provider credentials. Complete legal and asset review above before accepting public users.
+
+## Free Vercel demo setup
+
+For a friend-facing showcase that needs no backend, deploy only the frontend and share the generated URL with `?demo=1` added at the end (for example, `https://your-project.vercel.app/?demo=1`). This opens a standalone interactive preview with clearly labeled sample listings; search, save, and listing details work locally, while login and real contact are intentionally not connected. The normal site URL continues to use the existing app.
+
+The frontend and API can be configured as two Vercel projects from the same GitHub repository:
+
+- **Frontend project:** Root Directory `frontend`, build command `npm run build`, output `dist`, environment variable `VITE_API_BASE_URL` set to the API project's HTTPS URL.
+- **API project:** Root Directory `backend`; `main.py` exports the FastAPI app for Vercel's Python runtime. Set `DATABASE_URL`, `APP_ENV`, `CORS_ORIGINS`, `ALLOWED_HOSTS`, `UPLOAD_DIR`, database pool values, and the other required backend environment variables in Vercel.
+- Set `CORS_ORIGINS` to the exact frontend origin and `ALLOWED_HOSTS` to the API hostname. Rebuild the frontend when its API URL changes.
+
+Vercel Functions have temporary local storage. The current backend stores listing and profile photos on local disk, so this code is **not ready to keep uploaded photos on Vercel**. Add remote object storage and direct-to-storage uploads before publishing user listings. Migrate the existing PostgreSQL rows into the hosted database before directing users there; never point production at a newly empty database or drop the local database. Free plans have usage, inactivity, and retention limits; treat this as a demo until backups and persistence are confirmed.
