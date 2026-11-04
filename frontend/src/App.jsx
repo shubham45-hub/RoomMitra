@@ -1,14 +1,15 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import AuthForm from "./components/AuthForm";
 import ListingsPage from "./components/ListingsPage";
 import ProfileForm from "./components/ProfileForm";
-import { getProfile } from "./services/profile";
+import { getProfile, primeProfileCache } from "./services/profile";
 import MyListingsPage from "./components/MyListingsPage";
 import InquiriesPage from "./components/InquiriesPage";
 import ModerationPage from "./components/ModerationPage";
 import PublicInfoPage from "./components/PublicInfoPage";
 import SiteFooter from "./components/SiteFooter";
 import { getModerationAccess } from "./services/listings";
+import { clearRequestCache } from "./services/requestCache";
 import DemoPreview from "./components/DemoPreview";
 import AppTour from "./components/AppTour";
 import "./App.css";
@@ -31,15 +32,28 @@ export default function App() {
   const [token, setToken] = useState(() => IS_DEMO_PREVIEW ? null : sessionStorage.getItem(TOKEN_KEY));
   const [profile, setProfile] = useState(null);
   const [screen, setScreen] = useState("listings");
+  const [visitedScreens, setVisitedScreens] = useState(() => new Set(["listings"]));
   const [publicPage, setPublicPage] = useState(null);
   const [canModerate, setCanModerate] = useState(false);
   const [tourDismissed, setTourDismissed] = useState(false);
 
+  const navigateTo = useCallback((nextScreen) => {
+    setVisitedScreens((current) => new Set(current).add(nextScreen));
+    setScreen(nextScreen);
+  }, []);
+  const goToListings = useCallback(() => navigateTo("listings"), [navigateTo]);
+  const goToProfile = useCallback(() => navigateTo("profile"), [navigateTo]);
+  const goToMyListings = useCallback(() => navigateTo("my-listings"), [navigateTo]);
+  const goToInquiries = useCallback(() => navigateTo("inquiries"), [navigateTo]);
+  const goToModeration = useCallback(() => navigateTo("moderation"), [navigateTo]);
+
   useEffect(() => {
     if (!token) return;
+    let cancelled = false;
 
     getProfile(token)
       .then((loadedProfile) => {
+        if (cancelled) return;
         setProfile((currentProfile) => {
           if (!currentProfile) return loadedProfile;
           const merged = { ...currentProfile, ...loadedProfile };
@@ -54,10 +68,12 @@ export default function App() {
         });
       })
       .catch(() => {
+        if (cancelled) return;
         sessionStorage.removeItem(TOKEN_KEY);
         setToken(null);
         setProfile(null);
       });
+    return () => { cancelled = true; };
   }, [token]);
 
   useEffect(() => {
@@ -74,7 +90,9 @@ export default function App() {
   }, [token]);
 
   function signedIn(accessToken, user) {
+    clearRequestCache();
     sessionStorage.setItem(TOKEN_KEY, accessToken);
+    if (user) primeProfileCache(accessToken, user);
     if (user?.id && needsOnboarding(user)) {
       sessionStorage.setItem(TOUR_PENDING_KEY, String(user.id));
     } else {
@@ -84,16 +102,20 @@ export default function App() {
     setProfile(user);
     setCanModerate(false);
     setTourDismissed(false);
+    setVisitedScreens(new Set(["listings"]));
     setScreen("listings");
   }
 
   function signOut() {
+    clearRequestCache();
     sessionStorage.removeItem(TOKEN_KEY);
     sessionStorage.removeItem(TOUR_PENDING_KEY);
     setToken(null);
     setProfile(null);
     setCanModerate(false);
     setTourDismissed(false);
+    setVisitedScreens(new Set(["listings"]));
+    setScreen("listings");
   }
 
   function finishTour() {
@@ -102,27 +124,27 @@ export default function App() {
     }
     sessionStorage.removeItem(TOUR_PENDING_KEY);
     setTourDismissed(true);
-    setScreen("listings");
+    navigateTo("listings");
   }
 
   if (IS_DEMO_PREVIEW) return <DemoPreview />;
 
-  if (publicPage) {
+  if (!token && !publicPage) {
+    return (
+      <main className="page">
+        <AuthForm onSignedIn={signedIn} />
+        <SiteFooter onNavigate={setPublicPage} />
+      </main>
+    );
+  }
+
+  if (!token && publicPage) {
     return (
       <PublicInfoPage
         page={publicPage}
         onNavigate={setPublicPage}
         onBack={() => setPublicPage(null)}
       />
-    );
-  }
-
-  if (!token) {
-    return (
-      <main className="page">
-        <AuthForm onSignedIn={signedIn} />
-        <SiteFooter onNavigate={setPublicPage} />
-      </main>
     );
   }
 
@@ -152,51 +174,64 @@ export default function App() {
     return <AppTour onSkip={finishTour} onFinish={finishTour} />;
   }
 
-  if (screen === "my-listings") {
   return (
-    <MyListingsPage
-      token={token}
-      userId={profile.id}
-      onBack={() => setScreen("listings")}
-    />
-  );
-}
-
-  if (screen === "inquiries") {
-    return <InquiriesPage token={token} onBack={() => setScreen("listings")} />;
-  }
-
-  if (screen === "moderation" && canModerate) {
-    return <ModerationPage token={token} onBack={() => setScreen("listings")} />;
-  }
-
-  if (screen === "profile") {
-    return (
-      <main className="page">
-        <ProfileForm
-          profile={profile}
-          token={token}
-          onSaved={setProfile}
-          onSignOut={signOut}
-          onBack={() => setScreen("listings")}
+    <>
+      {publicPage && (
+        <PublicInfoPage
+          page={publicPage}
+          onNavigate={setPublicPage}
+          onBack={() => setPublicPage(null)}
         />
-      </main>
-    );
-  }
-
-  return (
-    <ListingsPage
-      token={token}
-      userId={profile.id}
-      profile={profile}
-      preferredCity={profile.preferred_city}
-      onProfile={() => setScreen("profile")}
-      onMyListings={() => setScreen("my-listings")}
-      onInquiries={() => setScreen("inquiries")}
-      onModeration={() => setScreen("moderation")}
-      canModerate={canModerate}
-      onSignOut={signOut}
-      onPublicPage={setPublicPage}
-    />
+      )}
+      <div hidden={Boolean(publicPage) || screen !== "listings"}>
+        <ListingsPage
+          token={token}
+          userId={profile.id}
+          profile={profile}
+          preferredCity={profile.preferred_city}
+          onProfile={goToProfile}
+          onMyListings={goToMyListings}
+          onInquiries={goToInquiries}
+          onModeration={goToModeration}
+          canModerate={canModerate}
+          onSignOut={signOut}
+          onPublicPage={setPublicPage}
+          active={screen === "listings"}
+        />
+      </div>
+      {visitedScreens.has("my-listings") && (
+        <div hidden={Boolean(publicPage) || screen !== "my-listings"}>
+          <MyListingsPage
+            token={token}
+            userId={profile.id}
+            onBack={goToListings}
+            active={screen === "my-listings"}
+          />
+        </div>
+      )}
+      {visitedScreens.has("inquiries") && (
+        <div hidden={Boolean(publicPage) || screen !== "inquiries"}>
+          <InquiriesPage token={token} onBack={goToListings} />
+        </div>
+      )}
+      {visitedScreens.has("moderation") && canModerate && (
+        <div hidden={Boolean(publicPage) || screen !== "moderation"}>
+          <ModerationPage token={token} onBack={goToListings} />
+        </div>
+      )}
+      {visitedScreens.has("profile") && (
+        <div hidden={Boolean(publicPage) || screen !== "profile"}>
+          <main className="page">
+            <ProfileForm
+              profile={profile}
+              token={token}
+              onSaved={setProfile}
+              onSignOut={signOut}
+              onBack={goToListings}
+            />
+          </main>
+        </div>
+      )}
+    </>
   );
 }

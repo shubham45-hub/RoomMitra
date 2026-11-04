@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CreateListingForm from "./CreateListingForm";
 import ListingCard from "./ListingCard";
 import ListingDetails from "./ListingDetails";
@@ -12,6 +12,7 @@ import {
   getListings,
   getSavedListings,
   getUnreadInquiryCount,
+  cacheSavedListings,
   recordListingView,
   removeSavedListing,
   saveListing,
@@ -42,7 +43,7 @@ function describeResults(filters, city) {
   return `Showing ${parts.join(" ")}`;
 }
 
-export default function ListingsPage({ token, userId, profile, preferredCity, onProfile, onSignOut, onMyListings, onInquiries, onModeration, onPublicPage, canModerate }) {
+export default function ListingsPage({ token, userId, profile, preferredCity, onProfile, onSignOut, onMyListings, onInquiries, onModeration, onPublicPage, canModerate, active = true }) {
   const [keyword, setKeyword] = useState("");
   const [flatType, setFlatType] = useState("");
   const [listings, setListings] = useState([]);
@@ -57,12 +58,11 @@ export default function ListingsPage({ token, userId, profile, preferredCity, on
   const [appliedFilters, setAppliedFilters] = useState({});
   const [loading, setLoading] = useState(false);
   const [initialLoadKey, setInitialLoadKey] = useState(null);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [nextOffset, setNextOffset] = useState(0);
-  const [hasMore, setHasMore] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageLoading, setPageLoading] = useState(false);
+  const [paginationError, setPaginationError] = useState("");
   const [message, setMessage] = useState("");
   const [listingsError, setListingsError] = useState("");
-  const [loadMoreError, setLoadMoreError] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [selectedListing, setSelectedListing] = useState(null);
   const [pendingListingAction, setPendingListingAction] = useState(null);
@@ -72,18 +72,19 @@ export default function ListingsPage({ token, userId, profile, preferredCity, on
   const [savedMode, setSavedMode] = useState(false);
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [unreadInquiryCount, setUnreadInquiryCount] = useState(0);
+  const pageRequestId = useRef(0);
+  const pageTarget = useRef(1);
+  const pendingActionRef = useRef(false);
+  const savedListingsRef = useRef(savedListings);
+  const listingsRef = useRef(listings);
   const currentLoadKey = `${token ?? ""}:${preferredCity ?? ""}`;
   const isLoading = loading || initialLoadKey !== currentLoadKey;
   const visibleListings = savedMode ? savedListings : listings;
-  const hasActiveFilters = Boolean(
+  const hasActiveFilters = useMemo(() => Boolean(
     keyword.trim() || flatType.trim() || locality.trim() || minRent || maxRent || minBeds ||
     furnishingStatus || availability || sort !== "newest",
-  );
-  const isFilterApplied = (key, value) => Boolean(
-    appliedFilters[key] && String(appliedFilters[key]) === String(value) &&
-    !(key === "sort" && value === "newest"),
-  );
-  const appliedFilterItems = [
+  ), [availability, flatType, furnishingStatus, keyword, locality, maxRent, minBeds, minRent, sort]);
+  const appliedFilterItems = useMemo(() => [
     { key: "keyword", label: `Search: ${appliedFilters.keyword}`, value: appliedFilters.keyword, setter: setKeyword, resetValue: "" },
     { key: "locality", label: `Locality: ${appliedFilters.locality}`, value: appliedFilters.locality, setter: setLocality, resetValue: "" },
     { key: "flatType", label: `Flat type: ${appliedFilters.flatType}`, value: appliedFilters.flatType, setter: setFlatType, resetValue: "" },
@@ -93,13 +94,35 @@ export default function ListingsPage({ token, userId, profile, preferredCity, on
     { key: "furnishingStatus", label: `Furnishing: ${{ FURNISHED: "Furnished", SEMI_FURNISHED: "Semi-furnished", UNFURNISHED: "Unfurnished" }[appliedFilters.furnishingStatus]}`, value: appliedFilters.furnishingStatus, setter: setFurnishingStatus, resetValue: "" },
     { key: "availability", label: `Availability: ${{ AVAILABLE: "Available", FILLED: "Filled" }[appliedFilters.availability]}`, value: appliedFilters.availability, setter: setAvailability, resetValue: "" },
     { key: "sort", label: `Sort: ${{ rent_low: "Lowest rent", rent_high: "Highest rent" }[appliedFilters.sort]}`, value: appliedFilters.sort === "newest" ? "" : appliedFilters.sort, setter: setSort, resetValue: "newest" },
-  ].filter((filter) => filter.value);
-  const resultsContext = describeResults(appliedFilters, preferredCity?.trim());
-  const resultsCountLabel = savedMode
+  ].filter((filter) => filter.value), [appliedFilters]);
+  const resultsContext = useMemo(
+    () => describeResults(appliedFilters, preferredCity?.trim()),
+    [appliedFilters, preferredCity],
+  );
+  const totalPages = Math.max(1, Math.ceil(totalListingCount / PAGE_SIZE));
+  const pageNumberStart = Math.max(1, Math.min(currentPage - 2, totalPages - 4));
+  const pageNumbers = useMemo(() => Array.from(
+    { length: Math.min(5, totalPages) },
+    (_, index) => pageNumberStart + index,
+  ), [pageNumberStart, totalPages]);
+  const resultsCountLabel = useMemo(() => savedMode
     ? `${visibleListings.length} saved ${visibleListings.length === 1 ? "listing" : "listings"}`
-    : listings.length < totalListingCount
-      ? `Showing ${listings.length} of ${totalListingCount} listings`
-      : `${totalListingCount} ${totalListingCount === 1 ? "listing" : "listings"}`;
+    : totalListingCount
+      ? `Showing ${(currentPage - 1) * PAGE_SIZE + 1}-${Math.min(currentPage * PAGE_SIZE, totalListingCount)} of ${totalListingCount} listings`
+      : "0 listings", [currentPage, savedMode, totalListingCount, visibleListings.length]);
+
+  const isFilterApplied = useCallback((key, value) => Boolean(
+    appliedFilters[key] && String(appliedFilters[key]) === String(value) &&
+    !(key === "sort" && value === "newest"),
+  ), [appliedFilters]);
+
+  useEffect(() => {
+    savedListingsRef.current = savedListings;
+  }, [savedListings]);
+
+  useEffect(() => {
+    listingsRef.current = listings;
+  }, [listings]);
 
   useEffect(() => {
     function updateBackToTopVisibility() {
@@ -110,8 +133,9 @@ export default function ListingsPage({ token, userId, profile, preferredCity, on
     return () => window.removeEventListener("scroll", updateBackToTopVisibility);
   }, []);
 
-  async function viewListing(id, openContactFirst = false) {
-    if (pendingListingAction) return;
+  const viewListing = useCallback(async (id, openContactFirst = false) => {
+    if (pendingActionRef.current) return;
+    pendingActionRef.current = true;
     setPendingListingAction({ listingId: id, type: openContactFirst ? "contact" : "details" });
     setMessage("");
     try {
@@ -139,17 +163,21 @@ export default function ListingsPage({ token, userId, profile, preferredCity, on
     } catch (error) {
       setMessage(error.message);
     } finally {
+      pendingActionRef.current = false;
       setPendingListingAction(null);
     }
-  }
+  }, [token, userId]);
 
-  async function search(event, overrides = {}) {
+  const search = useCallback(async (event, overrides = {}) => {
     event?.preventDefault();
+    const requestId = ++pageRequestId.current;
+    pageTarget.current = 1;
+    setPageLoading(false);
     setSavedMode(false);
     setLoading(true);
     setMessage("");
     setListingsError("");
-    setLoadMoreError("");
+    setPaginationError("");
 
     const filters = { keyword, city: preferredCity, flatType, locality, minRent, maxRent, minBeds, furnishingStatus, availability, sort, ...overrides };
     const hasOtherFilters = [filters.keyword, filters.flatType, filters.locality, filters.minRent, filters.maxRent, filters.minBeds, filters.furnishingStatus, filters.availability]
@@ -167,9 +195,9 @@ export default function ListingsPage({ token, userId, profile, preferredCity, on
         offset: 0,
         onTotalCount: setTotalListingCount,
       });
+      if (requestId !== pageRequestId.current) return;
       setListings(results);
-      setNextOffset(results.length);
-      setHasMore(results.length === PAGE_SIZE);
+      setCurrentPage(1);
       setAppliedFilters({
         keyword: filters.keyword,
         flatType: filters.flatType,
@@ -182,20 +210,49 @@ export default function ListingsPage({ token, userId, profile, preferredCity, on
         sort: filters.sort,
       });
     } catch (error) {
-      setListingsError(error.message);
+      if (requestId === pageRequestId.current) setListingsError(error.message);
     } finally {
-      setLoading(false);
+      if (requestId === pageRequestId.current) {
+        setInitialLoadKey(currentLoadKey);
+        setLoading(false);
+      }
     }
-  }
+  }, [availability, currentLoadKey, flatType, furnishingStatus, keyword, locality, maxRent, minBeds, minRent, preferredCity, sort, token]);
 
-  function updateSearchFilter(name, value, currentValue, setValue) {
+  const goToPage = useCallback(async (page) => {
+    if (page < 1 || page > totalPages || (page === currentPage && !paginationError) || pageLoading) return;
+    const requestId = ++pageRequestId.current;
+    pageTarget.current = page;
+    setPageLoading(true);
+    setPaginationError("");
+    try {
+      const results = await getListings({
+        token,
+        city: preferredCity,
+        ...appliedFilters,
+        limit: PAGE_SIZE,
+        offset: (page - 1) * PAGE_SIZE,
+        onTotalCount: setTotalListingCount,
+      });
+      if (requestId !== pageRequestId.current) return;
+      setListings(results);
+      setCurrentPage(page);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (error) {
+      if (requestId === pageRequestId.current) setPaginationError(error.message);
+    } finally {
+      if (requestId === pageRequestId.current) setPageLoading(false);
+    }
+  }, [appliedFilters, currentPage, pageLoading, paginationError, preferredCity, token, totalPages]);
+
+  const updateSearchFilter = useCallback((name, value, currentValue, setValue) => {
     setValue(value);
     const wasSet = Boolean(String(currentValue));
     const isCleared = !String(value).trim();
     if (wasSet && isCleared) void search(undefined, { [name]: "" });
-  }
+  }, [search]);
 
-  function clearFilters() {
+  const clearFilters = useCallback(() => {
     setKeyword("");
     setFlatType("");
     setLocality("");
@@ -216,9 +273,11 @@ export default function ListingsPage({ token, userId, profile, preferredCity, on
       availability: "",
       sort: "newest",
     });
-  }
+  }, [search]);
 
   useEffect(() => {
+    if (!active) return undefined;
+    const requestId = ++pageRequestId.current;
     let cancelled = false;
 
     getListings({
@@ -229,18 +288,21 @@ export default function ListingsPage({ token, userId, profile, preferredCity, on
       onTotalCount: (count) => { if (!cancelled) setTotalListingCount(count); },
     })
       .then((items) => {
-        if (!cancelled) {
+      if (!cancelled && requestId === pageRequestId.current) {
           setListings(items);
           setListingsError("");
-          setNextOffset(items.length);
-          setHasMore(items.length === PAGE_SIZE);
+          pageTarget.current = 1;
+          setCurrentPage(1);
         }
       })
       .catch((error) => {
-        if (!cancelled) setListingsError(error.message);
+        if (!cancelled && requestId === pageRequestId.current) setListingsError(error.message);
       })
       .finally(() => {
-        if (!cancelled) setInitialLoadKey(currentLoadKey);
+        if (!cancelled && requestId === pageRequestId.current) {
+          setInitialLoadKey(currentLoadKey);
+          setPageLoading(false);
+        }
       });
 
     getSavedListings(token)
@@ -253,10 +315,12 @@ export default function ListingsPage({ token, userId, profile, preferredCity, on
 
     return () => {
       cancelled = true;
+      pageRequestId.current += 1;
     };
-  }, [token, preferredCity, currentLoadKey]);
+  }, [active, token, preferredCity, currentLoadKey]);
 
   useEffect(() => {
+    if (!active) return undefined;
     let cancelled = false;
     const refreshUnreadCount = async () => {
       try {
@@ -275,24 +339,17 @@ export default function ListingsPage({ token, userId, profile, preferredCity, on
       window.clearInterval(intervalId);
       window.removeEventListener("focus", refreshUnreadCount);
     };
-  }, [token]);
+  }, [active, token]);
 
-  async function listingCreated(_listing, photoUploadMessage) {
+  const listingCreated = useCallback((_listing, photoUploadMessage) => {
     setShowCreate(false);
-    await search();
-    setMessage(photoUploadMessage || "Your listing is published.");
-  }
+    void search().then(() => setMessage(photoUploadMessage || "Your listing is published."));
+  }, [search]);
 
-  async function refreshSaved() {
-    try {
-      setSavedListings(await getSavedListings(token));
-    } catch (error) {
-      setMessage(error.message);
-    }
-  }
-
-  async function toggleSave(id) {
-    const alreadySaved = savedListings.some((listing) => listing.id === id);
+  const toggleSave = useCallback(async (id) => {
+    const savedSnapshot = savedListingsRef.current;
+    const alreadySaved = savedSnapshot.some((listing) => listing.id === id);
+    const listingToSave = listingsRef.current.find((listing) => listing.id === id);
 
     try {
       if (alreadySaved) {
@@ -300,37 +357,51 @@ export default function ListingsPage({ token, userId, profile, preferredCity, on
       } else {
         await saveListing(token, id);
       }
-      await refreshSaved();
+      const nextSaved = alreadySaved
+        ? savedSnapshot.filter((listing) => listing.id !== id)
+        : listingToSave
+          ? [listingToSave, ...savedSnapshot]
+          : await getSavedListings(token);
+      setSavedListings(nextSaved);
+      savedListingsRef.current = nextSaved;
+      cacheSavedListings(token, nextSaved);
     } catch (error) {
       setMessage(error.message);
     }
-  }
+  }, [token]);
 
-  async function loadMore() {
-    if (loadingMore || !hasMore || savedMode) return;
-    setLoadingMore(true);
-    setLoadMoreError("");
-    setMessage("");
-    try {
-      const items = await getListings({
-        token, keyword, city: preferredCity, flatType, locality, minRent, maxRent, minBeds, furnishingStatus, availability, sort,
-        limit: PAGE_SIZE,
-        offset: nextOffset,
-        onTotalCount: setTotalListingCount,
-      });
-      setListings((current) => [...current, ...items]);
-      setNextOffset((current) => current + items.length);
-      setHasMore(items.length === PAGE_SIZE);
-    } catch (error) {
-      setLoadMoreError(error.message);
-    } finally {
-      setLoadingMore(false);
-    }
-  }
+  const handleContactCountChanged = useCallback((listingId, count) => {
+    setListings((current) => current.map((item) => item.id === listingId ? { ...item, contacts_total: count } : item));
+    setSavedListings((current) => current.map((item) => item.id === listingId ? { ...item, contacts_total: count } : item));
+  }, []);
+
+  const handleReactionChange = useCallback((listingId, reaction) => {
+    setListings((current) => current.map((item) => item.id === listingId ? { ...item, ...reaction } : item));
+    setSavedListings((current) => current.map((item) => item.id === listingId ? { ...item, ...reaction } : item));
+    setSelectedListing((current) => current?.id === listingId ? { ...current, ...reaction } : current);
+  }, []);
+
+  const handleContactListing = useCallback((listingId) => {
+    void viewListing(listingId, true);
+  }, [viewListing]);
+
+  const closeDetails = useCallback(() => {
+    setSelectedListing(null);
+    setContactFirst(false);
+    setContactLaunch(null);
+  }, []);
+
+  const toggleSavedMode = useCallback(() => {
+    setSavedMode((current) => !current);
+  }, []);
+
+  const toggleCreate = useCallback(() => {
+    setShowCreate((current) => !current);
+  }, []);
 
   return (
     <div className="browse-layout">
-      <ExpiryNotification token={token} />
+      <ExpiryNotification token={token} active={active} />
       {selectedListing && (
         <ListingDetails
           listing={selectedListing}
@@ -339,16 +410,9 @@ export default function ListingsPage({ token, userId, profile, preferredCity, on
           initialContactError={contactLaunch?.contactError || ""}
           token={token}
           currentUserId={userId}
-          onContactCountChanged={(listingId, count) => {
-            setListings((current) => current.map((item) => item.id === listingId ? { ...item, contacts_total: count } : item));
-            setSavedListings((current) => current.map((item) => item.id === listingId ? { ...item, contacts_total: count } : item));
-          }}
-          onReactionChange={(listingId, reaction) => {
-            setListings((current) => current.map((item) => item.id === listingId ? { ...item, ...reaction } : item));
-            setSavedListings((current) => current.map((item) => item.id === listingId ? { ...item, ...reaction } : item));
-            setSelectedListing((current) => current?.id === listingId ? { ...current, ...reaction } : current);
-          }}
-          onClose={() => { setSelectedListing(null); setContactFirst(false); setContactLaunch(null); }}
+          onContactCountChanged={handleContactCountChanged}
+          onReactionChange={handleReactionChange}
+          onClose={closeDetails}
         />
       )}
 
@@ -379,7 +443,7 @@ export default function ListingsPage({ token, userId, profile, preferredCity, on
           {canModerate && <button className="nav-button" onClick={onModeration}>Owner reports</button>}
           <button
             className="nav-button"
-            onClick={() => setSavedMode((current) => !current)}
+            onClick={toggleSavedMode}
           >
             {savedMode ? "Browse homes" : "Saved homes"}
           </button>
@@ -515,7 +579,7 @@ export default function ListingsPage({ token, userId, profile, preferredCity, on
             </span>
             <button
               className="post-listing-button"
-              onClick={() => setShowCreate((current) => !current)}
+              onClick={toggleCreate}
             >
               {showCreate ? "Close form" : "+ Post a listing"}
             </button>
@@ -551,17 +615,14 @@ export default function ListingsPage({ token, userId, profile, preferredCity, on
                     key={listing.id}
                     listing={listing}
                     onView={viewListing}
-                    onContact={(listingId) => viewListing(listingId, true)}
+                    onContact={handleContactListing}
                     isSaved={savedListings.some((saved) => saved.id === listing.id)}
                     onToggleSave={toggleSave}
                     loadingAction={pendingListingAction?.listingId === listing.id ? pendingListingAction.type : ""}
                     actionsDisabled={Boolean(pendingListingAction)}
                     token={token}
                     currentUserId={userId}
-                    onReactionChange={(listingId, reaction) => {
-                      setListings((current) => current.map((item) => item.id === listingId ? { ...item, ...reaction } : item));
-                      setSavedListings((current) => current.map((item) => item.id === listingId ? { ...item, ...reaction } : item));
-                    }}
+                    onReactionChange={handleReactionChange}
                   />
                 ))}
               </div>
@@ -589,16 +650,43 @@ export default function ListingsPage({ token, userId, profile, preferredCity, on
                 )}
               </div>
             )}
-            {loadMoreError && (
-              <ListingsFetchError detail={loadMoreError} onRetry={() => void loadMore()} />
+            {paginationError && (
+              <ListingsFetchError detail={paginationError} onRetry={() => void goToPage(pageTarget.current)} />
             )}
-            {loadingMore && <ListingsLoadingState count={2} compact />}
           </>
         )}
-        {!savedMode && !isLoading && listings.length > 0 && hasMore && (
-          <button className="load-more-button" type="button" onClick={loadMore} disabled={loadingMore}>
-            {loadingMore ? "Loading more homes…" : "Load more homes"}
-          </button>
+        {!savedMode && !isLoading && totalPages > 1 && (
+          <nav className="listing-pagination" aria-label="Listing pages">
+            <button
+              type="button"
+              className="pagination-step"
+              onClick={() => void goToPage(currentPage - 1)}
+              disabled={currentPage === 1 || pageLoading}
+            >
+              Previous
+            </button>
+            {pageNumbers.map((page) => (
+              <button
+                type="button"
+                key={page}
+                className={`pagination-page${page === currentPage ? " is-current" : ""}`}
+                onClick={() => void goToPage(page)}
+                disabled={pageLoading}
+                aria-current={page === currentPage ? "page" : undefined}
+                aria-label={`Page ${page}`}
+              >
+                {page}
+              </button>
+            ))}
+            <button
+              type="button"
+              className="pagination-step"
+              onClick={() => void goToPage(currentPage + 1)}
+              disabled={currentPage >= totalPages || pageLoading}
+            >
+              {pageLoading ? "Loading…" : "Next"}
+            </button>
+          </nav>
         )}
       </section>
       <SiteFooter onNavigate={onPublicPage} />

@@ -1,13 +1,13 @@
-import { useState } from "react";
+import { memo, useCallback, useState } from "react";
 import { reactToListing } from "../services/listings";
 
-export default function ListingReaction({ listing, token, currentUserId, onChanged }) {
+function ListingReaction({ listing, token, currentUserId, onChanged }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const isOwner = listing.user_id === currentUserId;
   const readOnly = isOwner || listing.status === "FILLED";
 
-  async function choose(reaction) {
+  const choose = useCallback(async (reaction) => {
     setBusy(true);
     setError("");
     try {
@@ -17,7 +17,7 @@ export default function ListingReaction({ listing, token, currentUserId, onChang
     } finally {
       setBusy(false);
     }
-  }
+  }, [listing.id, onChanged, token]);
 
   return (
     <div className={`listing-reactions${readOnly ? " is-owner" : ""}`} aria-label="Listing likes and dislikes">
@@ -58,3 +58,5 @@ export default function ListingReaction({ listing, token, currentUserId, onChang
     </div>
   );
 }
+
+export default memo(ListingReaction);

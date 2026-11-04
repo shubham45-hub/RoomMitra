@@ -312,7 +312,20 @@ async def upload_listing_images(
             delete_upload(stored_url, UPLOAD_DIR)
         raise
 
-    return {"photo_urls": [resolve_upload_url(value) for value in saved_uploads]}
+    photos = db.query(ListingImage).filter(
+        ListingImage.listing_id == listing_id,
+    ).order_by(ListingImage.id).all()
+    return {
+        "photo_urls": [resolve_upload_url(value) for value in saved_uploads],
+        "photos": [
+            {
+                "id": image.id,
+                "image_url": resolve_upload_url(image.image_url),
+                "category": image.category,
+            }
+            for image in photos
+        ],
+    }
 
 
 @router.delete("/{listing_id}/images/{image_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -884,4 +897,3 @@ def delete_listing(
     for image_url in image_urls:
         delete_upload(image_url, UPLOAD_DIR)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-

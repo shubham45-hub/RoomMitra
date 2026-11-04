@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createListing, uploadListingImages } from "../services/listings";
 import LocalityAutocomplete from "./LocalityAutocomplete";
 
@@ -39,8 +39,8 @@ export default function CreateListingForm({ token, preferredCity, profileSex, on
   const [busy, setBusy] = useState(false);
   const [photos, setPhotos] = useState([]);
   const [photoError, setPhotoError] = useState("");
-  const [previewUrls, setPreviewUrls] = useState([]);
   const previewUrlsRef = useRef([]);
+  const previewUrls = useMemo(() => photos.map((photo) => photo.previewUrl), [photos]);
 
   useEffect(() => {
     return () => previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
@@ -49,7 +49,6 @@ export default function CreateListingForm({ token, preferredCity, profileSex, on
   function clearPhotos() {
     previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
     previewUrlsRef.current = [];
-    setPreviewUrls([]);
     setPhotos([]);
   }
 
@@ -67,7 +66,6 @@ export default function CreateListingForm({ token, preferredCity, profileSex, on
     previewUrlsRef.current.push(...added.map((photo) => photo.previewUrl));
     const next = [...otherPhotos, ...added];
     setPhotos(next);
-    setPreviewUrls(next.map((photo) => photo.previewUrl));
     setPhotoError("");
   }
 
@@ -76,7 +74,6 @@ export default function CreateListingForm({ token, preferredCity, profileSex, on
     previewUrlsRef.current = previewUrlsRef.current.filter((url) => url !== photo.previewUrl);
     const next = photos.filter((item) => item.previewUrl !== photo.previewUrl);
     setPhotos(next);
-    setPreviewUrls(next.map((item) => item.previewUrl));
     setPhotoError("");
   }
 
@@ -88,12 +85,15 @@ export default function CreateListingForm({ token, preferredCity, profileSex, on
     }));
   }
 
-  const keyPhotoAreas = photoCategories.slice(0, 4).map(([category, label]) => ({
+  const keyPhotoAreas = useMemo(() => photoCategories.slice(0, 4).map(([category, label]) => ({
     category,
     label,
     covered: photos.some((photo) => photo.category === category),
-  }));
-  const coveredPhotoAreas = keyPhotoAreas.filter((area) => area.covered).length;
+  })), [photos]);
+  const coveredPhotoAreas = useMemo(
+    () => keyPhotoAreas.filter((area) => area.covered).length,
+    [keyPhotoAreas],
+  );
 
   async function submit(event) {
     event.preventDefault();

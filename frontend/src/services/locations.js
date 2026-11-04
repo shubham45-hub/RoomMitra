@@ -1,7 +1,13 @@
 import { apiRequest } from "./api";
+import { getCachedRequest } from "./requestCache";
 
-export async function getLocalitySuggestions(city, query) {
+const SUGGESTIONS_TTL = 2 * 60 * 1000;
+
+export function getLocalitySuggestions(city, query) {
   const params = new URLSearchParams({ city, q: query });
-  const result = await apiRequest(`/locations/suggestions?${params}`);
-  return result.suggestions;
+  const key = `locations:suggestions:${city.toLowerCase()}:${query.toLowerCase()}`;
+  return getCachedRequest(key, async () => {
+    const result = await apiRequest(`/locations/suggestions?${params}`);
+    return result.suggestions;
+  }, SUGGESTIONS_TTL);
 }

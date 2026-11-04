@@ -1,8 +1,15 @@
+import { memo, useMemo } from "react";
 import PhotoGallery from "./PhotoGallery";
 import ListingReaction from "./ListingReaction";
 import { getImageUrl } from "../services/api";
 
-export default function ListingCard({
+const currencyFormatter = new Intl.NumberFormat("en-IN", {
+  style: "currency",
+  currency: "INR",
+  maximumFractionDigits: 0,
+});
+
+function ListingCard({
   listing,
   onView,
   onContact,
@@ -30,23 +37,23 @@ export default function ListingCard({
     return `Posted ${days} days ago`;
   }
 
-  const rent = new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0,
-  }).format(listing.monthly_rent);
+  const rent = currencyFormatter.format(listing.monthly_rent);
   const ageLabel = postedAge(listing.created_at);
   const peopleSharing = (listing.occupants_count ?? 0) + (listing.people_needed ?? listing.available_beds);
   const rentShare = listing.rent_basis === "WHOLE_FLAT" && peopleSharing > 0
-    ? new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 })
-      .format(Math.round(listing.monthly_rent / peopleSharing))
+    ? currencyFormatter.format(Math.round(listing.monthly_rent / peopleSharing))
     : null;
+  const photoCategories = useMemo(
+    () => (listing.photos || []).map((photo) => photo.category),
+    [listing.photos],
+  );
 
   return (
     <article className="listing-card">
       <div className="listing-card-media">
         <PhotoGallery
           photoUrls={listing.photo_urls || []}
+          photoCategories={photoCategories}
           title={listing.title}
           variant="card"
         />
@@ -163,3 +170,5 @@ export default function ListingCard({
     </article>
   );
 }
+
+export default memo(ListingCard);

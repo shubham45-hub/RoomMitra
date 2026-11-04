@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import PhotoGallery from "./PhotoGallery";
 import ListingReaction from "./ListingReaction";
 import { getListingContact, recordListingContact, reportListing, sendListingInquiry } from "../services/listings";
 
-export default function ListingDetails({ listing, token, currentUserId, onClose, onContactCountChanged, onReactionChange, focusContact = false, initialOwnerContact = null, initialContactError = "" }) {
+function ListingDetails({ listing, token, currentUserId, onClose, onContactCountChanged, onReactionChange, focusContact = false, initialOwnerContact = null, initialContactError = "" }) {
   const [showInquiry, setShowInquiry] = useState(focusContact && listing.status === "ACTIVE" && listing.user_id !== currentUserId);
   const [inquiryMessage, setInquiryMessage] = useState("");
   const [sharePhone, setSharePhone] = useState(false);
@@ -20,6 +20,10 @@ export default function ListingDetails({ listing, token, currentUserId, onClose,
   const [contactCount, setContactCount] = useState(listing.contacts_total ?? 0);
   const detailPanelRef = useRef(null);
   const contactSectionRef = useRef(null);
+  const photoCategories = useMemo(
+    () => (listing.photos || []).map((photo) => photo.category),
+    [listing.photos],
+  );
   const rupees = (amount) =>
     amount == null
       ? "Not specified"
@@ -156,7 +160,7 @@ export default function ListingDetails({ listing, token, currentUserId, onClose,
 
         <PhotoGallery
           photoUrls={listing.photo_urls || []}
-          photoCategories={(listing.photos || []).map((photo) => photo.category)}
+          photoCategories={photoCategories}
           title={listing.title}
           variant="details"
         />
@@ -319,3 +323,5 @@ export default function ListingDetails({ listing, token, currentUserId, onClose,
     </div>
   );
 }
+
+export default memo(ListingDetails);

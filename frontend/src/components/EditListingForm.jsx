@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   deleteListingImage,
   updateListing,
@@ -14,7 +14,7 @@ const photoCategories = [
   ["OTHER", "Other areas"],
 ];
 
-export default function EditListingForm({ token, listing, onSaved, onCancel }) {
+export default function EditListingForm({ token, listing, onSaved, onListingChanged, onCancel }) {
   const [form, setForm] = useState({
     title: listing.title,
     description: listing.description,
@@ -38,8 +38,8 @@ export default function EditListingForm({ token, listing, onSaved, onCancel }) {
   const [busy, setBusy] = useState(false);
   const [existingPhotos, setExistingPhotos] = useState(listing.photos || []);
   const [newPhotos, setNewPhotos] = useState([]);
-  const [previewUrls, setPreviewUrls] = useState([]);
   const previewUrlsRef = useRef([]);
+  const previewUrls = useMemo(() => newPhotos.map((photo) => photo.previewUrl), [newPhotos]);
 
   useEffect(() => () => {
     previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
@@ -60,7 +60,6 @@ export default function EditListingForm({ token, listing, onSaved, onCancel }) {
     previewUrlsRef.current.push(...added.map((photo) => photo.previewUrl));
     const next = [...otherPhotos, ...added];
     setNewPhotos(next);
-    setPreviewUrls(next.map((photo) => photo.previewUrl));
     setMessage("");
   }
 
@@ -69,7 +68,6 @@ export default function EditListingForm({ token, listing, onSaved, onCancel }) {
     previewUrlsRef.current = previewUrlsRef.current.filter((url) => url !== photo.previewUrl);
     const next = newPhotos.filter((item) => item.previewUrl !== photo.previewUrl);
     setNewPhotos(next);
-    setPreviewUrls(next.map((item) => item.previewUrl));
     setMessage("");
   }
 
@@ -79,7 +77,9 @@ export default function EditListingForm({ token, listing, onSaved, onCancel }) {
     setMessage("");
     try {
       await deleteListingImage(token, listing.id, photo.id);
-      setExistingPhotos((current) => current.filter((item) => item.id !== photo.id));
+      const nextPhotos = existingPhotos.filter((item) => item.id !== photo.id);
+      setExistingPhotos(nextPhotos);
+      onListingChanged?.(nextPhotos);
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -95,12 +95,15 @@ export default function EditListingForm({ token, listing, onSaved, onCancel }) {
     }));
   }
 
-  const keyPhotoAreas = photoCategories.slice(0, 4).map(([category, label]) => ({
+  const keyPhotoAreas = useMemo(() => photoCategories.slice(0, 4).map(([category, label]) => ({
     category,
     label,
     covered: existingPhotos.some((photo) => photo.category === category) || newPhotos.some((photo) => photo.category === category),
-  }));
-  const coveredPhotoAreas = keyPhotoAreas.filter((area) => area.covered).length;
+  })), [existingPhotos, newPhotos]);
+  const coveredPhotoAreas = useMemo(
+    () => keyPhotoAreas.filter((area) => area.covered).length,
+    [keyPhotoAreas],
+  );
 
   async function save(event) {
     event.preventDefault();
@@ -121,10 +124,16 @@ export default function EditListingForm({ token, listing, onSaved, onCancel }) {
         is_furnished: form.furnishing_status === "FURNISHED",
         brokerage: Number(form.brokerage || 0),
       });
+      let photos = existingPhotos;
       if (newPhotos.length) {
-        await uploadListingImages(token, listing.id, newPhotos);
+        const uploaded = await uploadListingImages(token, listing.id, newPhotos);
+        photos = uploaded.photos;
       }
-      onSaved(updated);
+      onSaved({
+        ...updated,
+        photos,
+        photo_urls: photos.map((photo) => photo.image_url),
+      });
     } catch (error) {
       setMessage(error.message);
     } finally {

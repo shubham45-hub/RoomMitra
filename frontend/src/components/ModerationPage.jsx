@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { getModerationReports, updateModerationReport } from "../services/listings";
 
 const REASONS = {
@@ -10,7 +10,7 @@ const REASONS = {
   OTHER: "Something else",
 };
 
-export default function ModerationPage({ token, onBack }) {
+function ModerationPage({ token, onBack }) {
   const [reports, setReports] = useState([]);
   const [statusFilter, setStatusFilter] = useState("OPEN");
   const [message, setMessage] = useState("");
@@ -24,6 +24,7 @@ export default function ModerationPage({ token, onBack }) {
           setReports(items);
           setMessage("");
         }
+
       })
       .catch((error) => {
         if (!cancelled) setMessage(error.message);
@@ -90,3 +91,5 @@ export default function ModerationPage({ token, onBack }) {
     </main>
   );
 }
+
+export default memo(ModerationPage);

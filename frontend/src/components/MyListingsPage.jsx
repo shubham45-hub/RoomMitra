@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import {
   deleteListing,
+  cacheMyListings,
   getMyListings,
   renewListing,
   updateListing,
@@ -10,7 +11,7 @@ import PhotoGallery from "./PhotoGallery";
 import ListingReaction from "./ListingReaction";
 import { ListingsFetchError, ListingsLoadingState } from "./ListingRequestState";
 
-export default function MyListingsPage({ token, userId, onBack }) {
+function MyListingsPage({ token, userId, onBack, active = true }) {
   const [listings, setListings] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadedToken, setLoadedToken] = useState(null);
@@ -33,9 +34,23 @@ export default function MyListingsPage({ token, userId, onBack }) {
     } finally {
       if (showLoading) setLoading(false);
     }
+
+  }
+
+  function applyUpdatedListing(updated) {
+    setListings((current) => current.map((item) => item.id === updated.id
+      ? {
+          ...item,
+          ...updated,
+          likes_count: item.likes_count,
+          dislikes_count: item.dislikes_count,
+          my_reaction: item.my_reaction,
+        }
+      : item));
   }
 
   useEffect(() => {
+    if (!active) return undefined;
     let cancelled = false;
 
     getMyListings(token)
@@ -55,7 +70,11 @@ export default function MyListingsPage({ token, userId, onBack }) {
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [active, token]);
+
+  useEffect(() => {
+    if (loadedToken === token) cacheMyListings(token, listings);
+  }, [listings, loadedToken, token]);
 
   async function toggleStatus(listing) {
     setBusyId(listing.id);
@@ -65,15 +84,16 @@ export default function MyListingsPage({ token, userId, onBack }) {
     setMessage("");
 
     try {
+      let updated;
       if (listing.is_expired) {
-        await renewListing(token, listing.id);
+        updated = await renewListing(token, listing.id);
       } else {
-        await updateListing(token, listing.id, { status: nextStatus });
+        updated = await updateListing(token, listing.id, { status: nextStatus });
       }
+      applyUpdatedListing(updated);
       setMessage(listing.is_expired
         ? "Listing renewed for 30 days and published."
         : markingAvailable ? "Mark as available is set." : "Listing paused.");
-      await loadListings();
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -87,9 +107,9 @@ export default function MyListingsPage({ token, userId, onBack }) {
     setBusyAction({ id: listing.id, action: "filled" });
     setMessage("");
     try {
-      await updateListing(token, listing.id, { status: "FILLED" });
+      const updated = await updateListing(token, listing.id, { status: "FILLED" });
+      applyUpdatedListing(updated);
       setMessage("Marked as filled. This listing is no longer shown as available.");
-      await loadListings();
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -109,8 +129,8 @@ export default function MyListingsPage({ token, userId, onBack }) {
 
     try {
       await deleteListing(token, listing.id);
+      setListings((current) => current.filter((item) => item.id !== listing.id));
       setMessage("Listing deleted.");
-      await loadListings();
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -163,9 +183,15 @@ export default function MyListingsPage({ token, userId, onBack }) {
                     token={token}
                     listing={listing}
                     onCancel={() => setEditingId(null)}
-                    onSaved={async () => {
+                    onListingChanged={(photos) => applyUpdatedListing({
+                      ...listing,
+                      photos,
+                      photo_urls: photos.map((photo) => photo.image_url),
+                    })}
+                    onSaved={(updated) => {
                     setEditingId(null);
-                    if (await loadListings()) setMessage("Listing updated.");
+                    applyUpdatedListing(updated);
+                    setMessage("Listing updated.");
                     }}
                 />
                 </>
@@ -262,3 +288,5 @@ export default function MyListingsPage({ token, userId, onBack }) {
     </main>
   );
 }
+
+export default memo(MyListingsPage);

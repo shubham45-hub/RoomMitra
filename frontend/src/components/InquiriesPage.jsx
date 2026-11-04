@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { getInquiryInbox } from "../services/listings";
 
-export default function InquiriesPage({ token, onBack }) {
+function InquiriesPage({ token, onBack }) {
   const [inquiries, setInquiries] = useState([]);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
@@ -70,3 +70,5 @@ export default function InquiriesPage({ token, onBack }) {
     </main>
   );
 }
+
+export default memo(InquiriesPage);

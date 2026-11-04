@@ -1,15 +1,16 @@
-import { useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { getMyListings, renewListing } from "../services/listings";
 
 const DISMISSED_KEY = "roommitra_expiry_notice_dismissed";
 const FIVE_DAYS_MS = 5 * 24 * 60 * 60 * 1000;
 
-export default function ExpiryNotification({ token }) {
+function ExpiryNotification({ token, active = true }) {
   const [expiringListings, setExpiringListings] = useState([]);
   const [busyId, setBusyId] = useState(null);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
+    if (!active) return undefined;
     if (sessionStorage.getItem(DISMISSED_KEY)) return undefined;
     let cancelled = false;
 
@@ -30,7 +31,7 @@ export default function ExpiryNotification({ token }) {
       .catch(() => {});
 
     return () => { cancelled = true; };
-  }, [token]);
+  }, [active, token]);
 
   useEffect(() => {
     if (!expiringListings.length) return undefined;
@@ -96,3 +97,5 @@ export default function ExpiryNotification({ token }) {
     </div>
   );
 }
+
+export default memo(ExpiryNotification);
