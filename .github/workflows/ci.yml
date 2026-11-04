@@ -54,4 +54,8 @@ jobs:
 
       - name: Run backend tests
         working-directory: backend
+        env:
+          # Unit tests override the database dependency with in-memory SQLite.
+          # The import-time PostgreSQL engine still needs a syntactically valid URL.
+          DATABASE_URL: postgresql+psycopg://roommitra:roommitra@localhost:5432/roommitra
         run: python -m pytest
