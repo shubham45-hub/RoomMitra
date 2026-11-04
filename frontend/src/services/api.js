@@ -27,12 +27,12 @@ export async function apiRequest(path, { token, onResponse, ...options } = {}) {
     });
   } catch (error) {
     if (error?.name === "TimeoutError") {
-      throw new Error("The server is taking longer than expected. Please try again.");
+      throw new Error("The server is taking longer than expected. Please try again.", { cause: error });
     }
     if (error instanceof TypeError) {
-      throw new Error("Couldn’t connect to RoomMitra. Check your connection and try again.");
+      throw new Error("Couldn’t connect to RoomMitra. Check your connection and try again.", { cause: error });
     }
-    throw error;
+    throw new Error("The request could not be completed.", { cause: error });
   }
 
   onResponse?.(response);

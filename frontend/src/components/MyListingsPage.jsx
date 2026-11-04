@@ -12,11 +12,13 @@ import { ListingsFetchError, ListingsLoadingState } from "./ListingRequestState"
 
 export default function MyListingsPage({ token, userId, onBack }) {
   const [listings, setListings] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [loadedToken, setLoadedToken] = useState(null);
   const [listingsError, setListingsError] = useState("");
   const [message, setMessage] = useState("");
   const [busyId, setBusyId] = useState(null);
   const [editingId, setEditingId] = useState(null);
+  const isLoading = loading || loadedToken !== token;
 
   async function loadListings(showLoading = false) {
     if (showLoading) setLoading(true);
@@ -34,18 +36,19 @@ export default function MyListingsPage({ token, userId, onBack }) {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setListingsError("");
 
     getMyListings(token)
       .then((items) => {
-        if (!cancelled) setListings(items);
+        if (!cancelled) {
+          setListings(items);
+          setListingsError("");
+        }
       })
       .catch((error) => {
         if (!cancelled) setListingsError(error.message);
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setLoadedToken(token);
       });
 
     return () => {
@@ -127,7 +130,7 @@ export default function MyListingsPage({ token, userId, onBack }) {
         </p>
 
         {message && <p className="message" role="status">{message}</p>}
-        {loading ? (
+        {isLoading ? (
           <ListingsLoadingState variant="my-listings" count={4} />
         ) : (
           <>

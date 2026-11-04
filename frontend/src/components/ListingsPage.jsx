@@ -55,7 +55,8 @@ export default function ListingsPage({ token, userId, profile, preferredCity, on
   const [availability, setAvailability] = useState("");
   const [sort, setSort] = useState("newest");
   const [appliedFilters, setAppliedFilters] = useState({});
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [initialLoadKey, setInitialLoadKey] = useState(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [nextOffset, setNextOffset] = useState(0);
   const [hasMore, setHasMore] = useState(false);
@@ -71,6 +72,8 @@ export default function ListingsPage({ token, userId, profile, preferredCity, on
   const [savedMode, setSavedMode] = useState(false);
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [unreadInquiryCount, setUnreadInquiryCount] = useState(0);
+  const currentLoadKey = `${token ?? ""}:${preferredCity ?? ""}`;
+  const isLoading = loading || initialLoadKey !== currentLoadKey;
   const visibleListings = savedMode ? savedListings : listings;
   const hasActiveFilters = Boolean(
     keyword.trim() || flatType.trim() || locality.trim() || minRent || maxRent || minBeds ||
@@ -217,8 +220,6 @@ export default function ListingsPage({ token, userId, profile, preferredCity, on
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setListingsError("");
 
     getListings({
       token,
@@ -230,6 +231,7 @@ export default function ListingsPage({ token, userId, profile, preferredCity, on
       .then((items) => {
         if (!cancelled) {
           setListings(items);
+          setListingsError("");
           setNextOffset(items.length);
           setHasMore(items.length === PAGE_SIZE);
         }
@@ -238,7 +240,7 @@ export default function ListingsPage({ token, userId, profile, preferredCity, on
         if (!cancelled) setListingsError(error.message);
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setInitialLoadKey(currentLoadKey);
       });
 
     getSavedListings(token)
@@ -252,7 +254,7 @@ export default function ListingsPage({ token, userId, profile, preferredCity, on
     return () => {
       cancelled = true;
     };
-  }, [token, preferredCity]);
+  }, [token, preferredCity, currentLoadKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -471,12 +473,12 @@ export default function ListingsPage({ token, userId, profile, preferredCity, on
           </label>
 
           {hasActiveFilters && (
-            <button type="button" className="clear-filters-button" onClick={clearFilters} disabled={loading}>
+            <button type="button" className="clear-filters-button" onClick={clearFilters} disabled={isLoading}>
               Clear filters
             </button>
           )}
-          <button type="submit" disabled={loading}>
-            {loading ? "Searching…" : "Find a room"}
+          <button type="submit" disabled={isLoading}>
+            {isLoading ? "Searching…" : "Find a room"}
           </button>
         </form>
         {appliedFilterItems.length > 0 && (
@@ -532,7 +534,7 @@ export default function ListingsPage({ token, userId, profile, preferredCity, on
 
         {message && <p className="message" role="status">{message}</p>}
 
-        {loading ? (
+        {isLoading ? (
           <ListingsLoadingState />
         ) : (
           <>
@@ -581,7 +583,7 @@ export default function ListingsPage({ token, userId, profile, preferredCity, on
                       : "Check back as new homes are added in your city."}
                 </p>
                 {!savedMode && appliedFilterItems.length > 0 && (
-                  <button type="button" className="clear-empty-filters" onClick={clearFilters} disabled={loading}>
+                  <button type="button" className="clear-empty-filters" onClick={clearFilters} disabled={isLoading}>
                     Clear all filters
                   </button>
                 )}
@@ -593,7 +595,7 @@ export default function ListingsPage({ token, userId, profile, preferredCity, on
             {loadingMore && <ListingsLoadingState count={2} compact />}
           </>
         )}
-        {!savedMode && !loading && listings.length > 0 && hasMore && (
+        {!savedMode && !isLoading && listings.length > 0 && hasMore && (
           <button className="load-more-button" type="button" onClick={loadMore} disabled={loadingMore}>
             {loadingMore ? "Loading more homes…" : "Load more homes"}
           </button>
