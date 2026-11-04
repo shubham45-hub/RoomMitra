@@ -17,6 +17,7 @@ export default function MyListingsPage({ token, userId, onBack }) {
   const [listingsError, setListingsError] = useState("");
   const [message, setMessage] = useState("");
   const [busyId, setBusyId] = useState(null);
+  const [busyAction, setBusyAction] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const isLoading = loading || loadedToken !== token;
 
@@ -58,37 +59,42 @@ export default function MyListingsPage({ token, userId, onBack }) {
 
   async function toggleStatus(listing) {
     setBusyId(listing.id);
+    const nextStatus = listing.status === "ACTIVE" ? "PAUSED" : "ACTIVE";
+    const markingAvailable = nextStatus === "ACTIVE";
+    if (markingAvailable) setBusyAction({ id: listing.id, action: "available" });
     setMessage("");
 
     try {
-      const nextStatus = listing.status === "ACTIVE" ? "PAUSED" : "ACTIVE";
       if (listing.is_expired) {
         await renewListing(token, listing.id);
       } else {
         await updateListing(token, listing.id, { status: nextStatus });
       }
-      if (await loadListings()) {
-        setMessage(listing.is_expired ? "Listing renewed for 30 days and published." : `Listing ${nextStatus === "ACTIVE" ? "published" : "paused"}.`);
-      }
+      setMessage(listing.is_expired
+        ? "Listing renewed for 30 days and published."
+        : markingAvailable ? "Mark as available is set." : "Listing paused.");
+      await loadListings();
     } catch (error) {
       setMessage(error.message);
     } finally {
       setBusyId(null);
+      setBusyAction(null);
     }
   }
 
   async function markFilled(listing) {
     setBusyId(listing.id);
+    setBusyAction({ id: listing.id, action: "filled" });
     setMessage("");
     try {
       await updateListing(token, listing.id, { status: "FILLED" });
-      if (await loadListings()) {
-        setMessage("Listing marked as filled and removed from search results.");
-      }
+      setMessage("Marked as filled. This listing is no longer shown as available.");
+      await loadListings();
     } catch (error) {
       setMessage(error.message);
     } finally {
       setBusyId(null);
+      setBusyAction(null);
     }
   }
 
@@ -98,17 +104,18 @@ export default function MyListingsPage({ token, userId, onBack }) {
     }
 
     setBusyId(listing.id);
+    setBusyAction({ id: listing.id, action: "delete" });
     setMessage("");
 
     try {
       await deleteListing(token, listing.id);
-      if (await loadListings()) {
-        setMessage("Listing deleted.");
-      }
+      setMessage("Listing deleted.");
+      await loadListings();
     } catch (error) {
       setMessage(error.message);
     } finally {
       setBusyId(null);
+      setBusyAction(null);
     }
   }
 
@@ -152,7 +159,6 @@ export default function MyListingsPage({ token, userId, onBack }) {
             <article className="my-listing-card" key={listing.id}>
             {editingId === listing.id ? (
                 <>
-                <h2>Edit listing</h2>
                 <EditListingForm
                     token={token}
                     listing={listing}
@@ -208,7 +214,12 @@ export default function MyListingsPage({ token, userId, onBack }) {
                     disabled={busyId === listing.id}
                     onClick={() => toggleStatus(listing)}
                     >
-                    {listing.is_expired
+                    {busyAction?.id === listing.id && busyAction.action === "available" ? (
+                      <span className="listing-action-label" aria-live="polite">
+                        <span className="listing-action-spinner" aria-hidden="true" />
+                        Setting mark as available…
+                      </span>
+                    ) : listing.is_expired
                       ? listing.status === "FILLED" ? "Renew & publish" : "Renew for 30 days"
                       : listing.status === "ACTIVE" ? "Pause listing" : listing.status === "PAUSED" ? "Publish again" : "Mark available"}
                     </button>
@@ -218,7 +229,12 @@ export default function MyListingsPage({ token, userId, onBack }) {
                         disabled={busyId === listing.id}
                         onClick={() => markFilled(listing)}
                       >
-                        Mark as filled
+                        {busyAction?.id === listing.id && busyAction.action === "filled" ? (
+                          <span className="listing-action-label" aria-live="polite">
+                            <span className="listing-action-spinner" aria-hidden="true" />
+                            Setting as filled…
+                          </span>
+                        ) : "Mark as filled"}
                       </button>
                     )}
                     <button
@@ -226,7 +242,12 @@ export default function MyListingsPage({ token, userId, onBack }) {
                     disabled={busyId === listing.id}
                     onClick={() => removeListing(listing)}
                     >
-                    Delete
+                    {busyAction?.id === listing.id && busyAction.action === "delete" ? (
+                      <span className="listing-action-label" aria-live="polite">
+                        <span className="listing-action-spinner" aria-hidden="true" />
+                        Deleting…
+                      </span>
+                    ) : "Delete"}
                     </button>
                 </div>
                 </>

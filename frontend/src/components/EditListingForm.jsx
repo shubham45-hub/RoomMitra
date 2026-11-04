@@ -134,157 +134,185 @@ export default function EditListingForm({ token, listing, onSaved, onCancel }) {
 
   return (
     <form className="edit-listing-form" onSubmit={save}>
-      <label>
-        Title
-        <input name="title" value={form.title} onChange={update} minLength={5} required />
-      </label>
+      <header className="edit-form-heading">
+        <div>
+          <p className="eyebrow">KEEP YOUR LISTING FRESH</p>
+          <h2>Edit your listing</h2>
+          <p>Update the details so prospective flatmates know what to expect.</p>
+        </div>
+        <span className="edit-form-status" aria-label={`Listing status: ${listing.is_expired ? "expired" : listing.status.toLowerCase()}`}>
+          <span aria-hidden="true" />
+          {listing.is_expired ? "Expired" : listing.status === "ACTIVE" ? "Live listing" : listing.status}
+        </span>
+      </header>
 
-      <label>
-        Description
-        <textarea
-          name="description"
-          value={form.description}
-          onChange={update}
-          minLength={20}
-          rows={4}
-          required
-        />
-      </label>
-
-      <div className="listing-form-row">
-        <label>
-          City
-          <input name="city" value={form.city} onChange={update} required />
-        </label>
-        <label>
-          Locality
-          <input name="locality" value={form.locality} onChange={update} required />
-        </label>
-      </div>
-
-      <div className="listing-form-row">
-        <label>
-          Flat type
-          <input name="flat_type" value={form.flat_type} onChange={update} required />
-        </label>
-        <label>
-          Pincode
-          <input
-            name="pincode"
-            value={form.pincode}
-            onChange={update}
-            inputMode="numeric"
-            pattern="[0-9]{6}"
-            maxLength={6}
-          />
-        </label>
-      </div>
-
-      <div className="listing-form-row listing-form-numbers">
-        <label>
-          People currently required
-          <input
-            name="available_beds"
-            type="number"
-            min="1"
-            max="20"
-            value={form.available_beds}
-            onChange={update}
-            required
-          />
-        </label>
-        <label>
-          People currently living in the flat
-          <input
-            name="occupants_count"
-            type="number"
-            min="0"
-            max="20"
-            value={form.occupants_count}
-            onChange={update}
-            required
-          />
-        </label>
-        <label>
-          Monthly rent (₹)
-          <input
-            name="monthly_rent"
-            type="number"
-            min="1"
-            value={form.monthly_rent}
-            onChange={update}
-            required
-          />
-        </label>
-      </div>
-
-      <div className="listing-form-row listing-form-numbers">
-        <div className="deposit-field">
-          <label htmlFor="edit-security-deposit">Security deposit (₹)</label>
-          <input
-            id="edit-security-deposit"
-            name="security_deposit"
-            type="number"
-            min="0"
-            value={form.deposit_same_as_rent ? form.monthly_rent : form.security_deposit}
-            disabled={form.deposit_same_as_rent}
-            onChange={update}
-          />
-          <label className="deposit-match-option">
-            <input name="deposit_same_as_rent" type="checkbox" checked={form.deposit_same_as_rent} onChange={update} />
-            Same as monthly rent
-          </label>
+      <section className="edit-form-section">
+        <div className="listing-section-heading">
+          <span className="listing-section-number">01</span>
+          <div><h3>About the space</h3><p>Give your room a clear title and description.</p></div>
         </div>
         <label>
-          Brokerage (₹)
-          <input
-            name="brokerage"
-            type="number"
-            min="0"
-            value={form.brokerage}
-            onChange={update}
-          />
+          Listing title
+          <input name="title" value={form.title} onChange={update} minLength={5} required />
         </label>
         <label>
-          Rent applies to
-          <select name="rent_basis" value={form.rent_basis} onChange={update}>
-            <option value="PER_PERSON">Each person</option>
-            <option value="WHOLE_FLAT">Whole flat</option>
-          </select>
+          Description
+          <textarea
+            name="description"
+            value={form.description}
+            onChange={update}
+            minLength={20}
+            rows={4}
+            required
+          />
         </label>
-      </div>
+      </section>
 
-      <fieldset className="furnishing-options">
-        <legend>Furnishing</legend>
-        {[
-          ["FURNISHED", "Furnished"],
-          ["SEMI_FURNISHED", "Semi-furnished"],
-          ["UNFURNISHED", "Unfurnished"],
-        ].map(([value, label]) => (
-          <label className="furnishing-choice" key={value}>
-            <input type="radio" name="furnishing_status" value={value} checked={form.furnishing_status === value} onChange={update} />
-            <span>{label}</span>
+      <section className="edit-form-section">
+        <div className="listing-section-heading">
+          <span className="listing-section-number">02</span>
+          <div><h3>Location and flat</h3><p>Help people understand where the room is.</p></div>
+        </div>
+        <div className="listing-form-row">
+          <label>
+            City
+            <input name="city" value={form.city} onChange={update} required />
           </label>
-        ))}
-      </fieldset>
-
-      <fieldset className="listing-audience-options">
-        <legend>Who can rent this room?</legend>
-        <p>Choose who should see and contact you about this listing.</p>
-        {[
-          ["MALE", "Men"],
-          ["FEMALE", "Women"],
-          ["ANY", "Anyone"],
-        ].map(([value, label]) => (
-          <label className="listing-audience-choice" key={value}>
-            <input type="radio" name="available_for" value={value} checked={form.available_for === value} onChange={update} />
-            <span>{label}</span>
+          <label>
+            Locality
+            <input name="locality" value={form.locality} onChange={update} required />
           </label>
-        ))}
-      </fieldset>
+        </div>
+        <div className="listing-form-row">
+          <label>
+            Flat type
+            <input name="flat_type" value={form.flat_type} onChange={update} required />
+          </label>
+          <label>
+            <span className="edit-form-label-line">Pincode <span className="edit-form-optional">Optional</span></span>
+            <input
+              name="pincode"
+              value={form.pincode}
+              onChange={update}
+              inputMode="numeric"
+              pattern="[0-9]{6}"
+              maxLength={6}
+            />
+          </label>
+        </div>
+      </section>
 
-      <section className="edit-photo-section">
-        <h3>Listing photos</h3>
+      <section className="edit-form-section">
+        <div className="listing-section-heading">
+          <span className="listing-section-number">03</span>
+          <div><h3>Rent and availability</h3><p>Make the costs and room availability easy to understand.</p></div>
+        </div>
+        <div className="listing-form-row listing-form-numbers">
+          <label>
+            People currently required
+            <input
+              name="available_beds"
+              type="number"
+              min="1"
+              max="20"
+              value={form.available_beds}
+              onChange={update}
+              required
+            />
+          </label>
+          <label>
+            People currently living in the flat
+            <input
+              name="occupants_count"
+              type="number"
+              min="0"
+              max="20"
+              value={form.occupants_count}
+              onChange={update}
+              required
+            />
+          </label>
+          <label>
+            Monthly rent (₹)
+            <input
+              name="monthly_rent"
+              type="number"
+              min="1"
+              value={form.monthly_rent}
+              onChange={update}
+              required
+            />
+          </label>
+          <div className="deposit-field">
+            <label htmlFor="edit-security-deposit">Security deposit (₹)</label>
+            <input
+              id="edit-security-deposit"
+              name="security_deposit"
+              type="number"
+              min="0"
+              value={form.deposit_same_as_rent ? form.monthly_rent : form.security_deposit}
+              disabled={form.deposit_same_as_rent}
+              onChange={update}
+            />
+            <label className="deposit-match-option">
+              <input name="deposit_same_as_rent" type="checkbox" checked={form.deposit_same_as_rent} onChange={update} />
+              Same as monthly rent
+            </label>
+          </div>
+          <label>
+            Brokerage (₹)
+            <input
+              name="brokerage"
+              type="number"
+              min="0"
+              value={form.brokerage}
+              onChange={update}
+            />
+          </label>
+          <label>
+            Rent applies to
+            <select name="rent_basis" value={form.rent_basis} onChange={update}>
+              <option value="PER_PERSON">Each person</option>
+              <option value="WHOLE_FLAT">Whole flat</option>
+            </select>
+          </label>
+        </div>
+
+        <fieldset className="furnishing-options">
+          <legend>Furnishing</legend>
+          {[
+            ["FURNISHED", "Furnished"],
+            ["SEMI_FURNISHED", "Semi-furnished"],
+            ["UNFURNISHED", "Unfurnished"],
+          ].map(([value, label]) => (
+            <label className="furnishing-choice" key={value}>
+              <input type="radio" name="furnishing_status" value={value} checked={form.furnishing_status === value} onChange={update} />
+              <span>{label}</span>
+            </label>
+          ))}
+        </fieldset>
+
+        <fieldset className="listing-audience-options">
+          <legend>Who can rent this room?</legend>
+          <p>Choose who should see and contact you about this listing.</p>
+          {[
+            ["MALE", "Men"],
+            ["FEMALE", "Women"],
+            ["ANY", "Anyone"],
+          ].map(([value, label]) => (
+            <label className="listing-audience-choice" key={value}>
+              <input type="radio" name="available_for" value={value} checked={form.available_for === value} onChange={update} />
+              <span>{label}</span>
+            </label>
+          ))}
+        </fieldset>
+      </section>
+
+      <section className="edit-form-section edit-photo-section">
+        <div className="listing-section-heading">
+          <span className="listing-section-number">04</span>
+          <div><h3>Listing photos</h3><p>Show people the spaces they’ll be sharing.</p></div>
+        </div>
         <p>{existingPhotos.length + newPhotos.length} of 12 photos added. Add photos by area, or remove existing photos.</p>
         <div className="photo-coverage" aria-label={`${coveredPhotoAreas} of 4 key photo areas covered`}>
           <strong>Key area coverage <span>{coveredPhotoAreas}/4</span></strong>
@@ -342,8 +370,8 @@ export default function EditListingForm({ token, listing, onSaved, onCancel }) {
       {message && <p className="message" role="alert">{message}</p>}
 
       <div className="edit-form-actions">
-        <button disabled={busy}>
-          {busy ? "Saving…" : "Save changes"}
+        <button className="edit-save-button" disabled={busy}>
+          {busy ? "Saving your changes…" : "Save changes"}
         </button>
         <button type="button" className="cancel-edit" onClick={onCancel}>
           Cancel

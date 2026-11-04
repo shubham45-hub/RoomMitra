@@ -2800,88 +2800,219 @@ button.delete-action {
 }
 .edit-listing-form {
   display: grid;
-  gap: 13px;
-  margin-top: 16px;
+  gap: 16px;
+  margin-top: 14px;
+}
+
+.edit-form-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 22px clamp(17px, 3vw, 26px);
+  border: 1px solid #e1ebdd;
+  border-radius: 18px;
+  background: radial-gradient(circle at 88% 0, rgba(213, 239, 155, 0.35), transparent 30%), linear-gradient(115deg, #f3f9ef, #fbfdf9 68%, #f8fbf3);
+}
+
+.edit-form-heading .eyebrow {
+  margin: 0 0 5px;
+  color: #568063;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.12em;
+}
+
+.edit-form-heading h2 {
+  margin: 0;
+  color: var(--ink);
+  font-family: "Manrope", sans-serif;
+  font-size: clamp(21px, 3vw, 26px);
+  letter-spacing: -0.035em;
+}
+
+.edit-form-heading > div > p:last-child {
+  margin: 6px 0 0;
+  color: #718076;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.edit-form-status {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 10px;
+  border: 1px solid #d5e8d5;
+  border-radius: 999px;
+  background: #f7fbf4;
+  color: #2e6a43;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.edit-form-status > span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #59a66d;
+  box-shadow: 0 0 0 3px #e1f1df;
+}
+
+.edit-form-section {
+  display: grid;
+  gap: 15px;
+  padding: clamp(15px, 2.5vw, 21px);
+  border: 1px solid #e6ede4;
+  border-radius: 17px;
+  background: #fff;
+  box-shadow: 0 5px 16px rgba(34, 63, 41, 0.035);
 }
 
 .edit-listing-form label {
   display: grid;
   gap: 7px;
   margin: 0;
+  color: #34463b;
+  font-size: 12px;
+  font-weight: 650;
 }
 
 .edit-listing-form input,
 .edit-listing-form textarea,
 .edit-listing-form select {
   width: 100%;
-  min-height: 44px;
-  padding: 10px 12px;
-  border: 1px solid #dfe6de;
-  border-radius: 11px;
+  min-height: 46px;
+  padding: 11px 13px;
+  border: 1px solid #dce5da;
+  border-radius: 12px;
+  outline: none;
   background: #fbfcfa;
   color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
+}
+
+.edit-listing-form input:focus,
+.edit-listing-form textarea:focus,
+.edit-listing-form select:focus {
+  border-color: #559672;
+  background: #fff;
+  box-shadow: 0 0 0 4px rgba(23, 107, 74, 0.09);
 }
 
 .edit-listing-form textarea {
+  min-height: 112px;
   resize: vertical;
+  line-height: 1.55;
+}
+
+.edit-listing-form .listing-form-row {
+  gap: 14px;
+}
+
+.edit-listing-form .listing-form-numbers {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.edit-form-optional {
+  color: #869187;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.edit-form-label-line {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.edit-listing-form .deposit-match-option input,
+.edit-listing-form .furnishing-choice input {
+  width: 17px;
+  min-width: 17px;
+  min-height: 17px;
+  height: 17px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+  accent-color: var(--green);
+}
+
+.edit-listing-form label.deposit-match-option {
+  gap: 7px;
+  white-space: normal;
+  font-size: 10px;
+}
+
+@media (max-width: 760px) {
+  .edit-listing-form .listing-form-numbers {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+
+  .edit-listing-form .furnishing-options {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .edit-listing-form label.furnishing-choice {
+    min-width: 0;
+    width: 100%;
+  }
 }
 
 .edit-photo-section {
-  display: grid;
-  gap: 9px;
-  padding: 14px;
-  border: 1px solid #e4ebe2;
-  border-radius: 14px;
-  background: #fafcf9;
+  gap: 14px;
+  background: linear-gradient(145deg, #fbfdf9, #fff 60%);
 }
 
-.edit-photo-section h3,
 .edit-photo-section p {
   margin: 0;
-}
-
-.edit-photo-section h3 {
-  color: var(--ink);
-  font-family: "Manrope", sans-serif;
-  font-size: 15px;
 }
 
 .edit-photo-section > p {
   color: var(--muted);
   font-size: 12px;
+  line-height: 1.5;
 }
 
 .edit-photo-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
-  gap: 9px;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 11px;
 }
 
 .edit-photo-item {
   overflow: hidden;
-  border-radius: 10px;
-  background: #edf1eb;
+  border: 1px solid #e2e9df;
+  border-radius: 12px;
+  background: #f6f9f4;
 }
 
 .edit-photo-item img {
   display: block;
   width: 100%;
-  height: 95px;
+  height: 110px;
   object-fit: cover;
 }
 
 .edit-photo-item small {
   display: block;
-  padding: 5px 7px;
+  padding: 7px 9px;
   color: #65766a;
   font-size: 10px;
 }
 
 .edit-photo-item button {
   width: 100%;
-  min-height: 32px;
+  min-height: 34px;
   margin: 0;
-  padding: 5px;
+  padding: 6px 8px;
+  border-top: 1px solid #f0dfda;
   border-radius: 0;
   background: #f8ece9;
   color: #9a4637;
@@ -2891,22 +3022,65 @@ button.delete-action {
 
 .edit-form-actions {
   display: flex;
+  justify-content: flex-end;
   gap: 9px;
+  padding-top: 2px;
 }
 
 .edit-form-actions button {
-  flex: 1;
-  min-height: 42px;
+  flex: 0 1 auto;
+  min-width: 130px;
+  min-height: 46px;
   margin: 0;
-  padding: 8px 11px;
-  font-size: 12px;
+  padding: 10px 17px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.edit-form-actions .edit-save-button {
+  min-width: 190px;
+  box-shadow: 0 8px 18px rgba(23, 107, 74, 0.16);
 }
 
 button.cancel-edit {
   border: 1px solid var(--line);
-  background: white;
+  background: #fff;
   color: var(--muted);
   box-shadow: none;
+}
+
+@media (max-width: 600px) {
+  .edit-form-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 13px;
+    padding: 18px 16px;
+  }
+
+  .edit-form-section {
+    gap: 13px;
+    padding: 14px;
+    border-radius: 15px;
+  }
+
+  .edit-listing-form .listing-form-row,
+  .edit-listing-form .listing-form-numbers {
+    grid-template-columns: 1fr;
+  }
+
+  .edit-listing-form .furnishing-options {
+    grid-template-columns: 1fr;
+  }
+
+  .edit-form-actions {
+    flex-direction: column-reverse;
+  }
+
+  .edit-form-actions button,
+  .edit-form-actions .edit-save-button {
+    width: 100%;
+  }
 }
 
 .my-listing-actions {
