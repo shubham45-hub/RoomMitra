@@ -48,3 +48,25 @@ button {
   color: #123c2b;
   background: #d9f36b;
 }
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  color: #e8f0e9;
+  background: #101713;
+  --ink: #e8f0e9;
+  --muted: #a4b2a8;
+  --green: #70c497;
+  --green-dark: #91d6ad;
+  --lime: #d9f36b;
+  --line: #35453b;
+}
+
+:root[data-theme="dark"],
+:root[data-theme="dark"] body {
+  background: #101713;
+}
+
+:root[data-theme="dark"] ::selection {
+  color: #10251a;
+  background: #a6d978;
+}

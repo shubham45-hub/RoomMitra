@@ -815,6 +815,46 @@ button.applied-filter-chip:hover:not(:disabled) {
   top: 52px;
 }
 
+.theme-toggle {
+  display: inline-flex;
+  min-width: 76px;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--green-dark);
+  font-size: 13px;
+  font-weight: 750;
+  box-shadow: 0 5px 14px rgba(31, 60, 39, 0.08);
+}
+
+.theme-toggle span {
+  font-size: 17px;
+  line-height: 1;
+}
+
+.theme-toggle.is-fixed {
+  position: fixed;
+  z-index: 1000;
+  top: 16px;
+  right: 16px;
+}
+
+@media (max-width: 700px) {
+  .theme-toggle.is-fixed {
+    top: 10px;
+    right: 10px;
+    min-width: 68px;
+    min-height: 38px;
+    padding: 7px 10px;
+  }
+}
+
 .photo-gallery-count,
 .photo-gallery-hint {
   position: absolute;
@@ -825,6 +865,255 @@ button.applied-filter-chip:hover:not(:disabled) {
   color: white;
   font-size: 11px;
   font-weight: 700;
+}
+
+:root[data-theme="dark"] body {
+  color: var(--ink);
+  background: #101713;
+}
+
+:root[data-theme="dark"] .page,
+:root[data-theme="dark"] .public-info-page,
+:root[data-theme="dark"] .browse-layout,
+:root[data-theme="dark"] .my-listings-page,
+:root[data-theme="dark"] .inquiries-page,
+:root[data-theme="dark"] .moderation-page,
+:root[data-theme="dark"] .demo-page {
+  color: var(--ink);
+  background: #101713;
+}
+
+:root[data-theme="dark"] .page {
+  background:
+    radial-gradient(ellipse at 8% 14%, #1d3024 0, transparent 32%),
+    radial-gradient(ellipse at 91% 82%, #1b2b21 0, transparent 30%),
+    linear-gradient(135deg, #111a15 0%, #17231b 52%, #111914 100%);
+}
+
+:root[data-theme="dark"] .browse-hero {
+  border-color: #314238;
+  background: linear-gradient(135deg, #1a2a20, #1b3024 52%, #203426);
+}
+
+:root[data-theme="dark"] .card,
+:root[data-theme="dark"] .profile-card,
+:root[data-theme="dark"] .listing-card,
+:root[data-theme="dark"] .my-listing-card,
+:root[data-theme="dark"] .inquiry-card,
+:root[data-theme="dark"] .moderation-report-card,
+:root[data-theme="dark"] .search-panel,
+:root[data-theme="dark"] .detail-panel,
+:root[data-theme="dark"] .expiry-notice-dialog,
+:root[data-theme="dark"] .public-info-content,
+:root[data-theme="dark"] .demo-home-card,
+:root[data-theme="dark"] .demo-modal,
+:root[data-theme="dark"] .demo-search,
+:root[data-theme="dark"] .listing-form,
+:root[data-theme="dark"] .listing-form-section,
+:root[data-theme="dark"] .edit-listing-form,
+:root[data-theme="dark"] .edit-form-section,
+:root[data-theme="dark"] .inquiry-form,
+:root[data-theme="dark"] .furnishing-options,
+:root[data-theme="dark"] .listing-audience-options,
+:root[data-theme="dark"] .listing-audience-choice,
+:root[data-theme="dark"] .phone-consent-option,
+:root[data-theme="dark"] .app-tour-dialog,
+:root[data-theme="dark"] .app-tour-header,
+:root[data-theme="dark"] .app-tour-footer,
+:root[data-theme="dark"] .app-tour-tip,
+:root[data-theme="dark"] .app-tour-preview-card,
+:root[data-theme="dark"] .phone-chip,
+:root[data-theme="dark"] .profile-photo-field,
+:root[data-theme="dark"] .photo-category-grid,
+:root[data-theme="dark"] .listing-photo-field,
+:root[data-theme="dark"] .direct-contact-panel,
+:root[data-theme="dark"] .detail-price-card,
+:root[data-theme="dark"] .detail-facts > div,
+:root[data-theme="dark"] .empty-state {
+  border-color: #35483c;
+  color: var(--ink);
+  background: #1a251e;
+}
+
+:root[data-theme="dark"] .card {
+  border-color: #394b3f;
+  background: rgba(26, 37, 30, 0.96);
+}
+
+:root[data-theme="dark"] .listing-card {
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.25);
+}
+
+:root[data-theme="dark"] .listing-card-content,
+:root[data-theme="dark"] .public-info-content section,
+:root[data-theme="dark"] .profile-danger-zone {
+  border-color: #35483c;
+  background-color: #1a251e;
+}
+
+:root[data-theme="dark"] .browse-header,
+:root[data-theme="dark"] .my-listings-toolbar,
+:root[data-theme="dark"] .site-footer {
+  border-color: #35483c;
+  background: #141d17;
+}
+
+:root[data-theme="dark"] .demo-hero {
+  border-color: #35483c;
+  color: var(--ink);
+  background: radial-gradient(ellipse at 84% 25%, #253b2b 0, transparent 34%), linear-gradient(120deg, #1d3023, #17231b 65%, #1b2b20);
+}
+
+:root[data-theme="dark"] .detail-sticky-bar,
+:root[data-theme="dark"] .detail-scroll-content,
+:root[data-theme="dark"] .listing-form-section,
+:root[data-theme="dark"] .edit-form-section,
+:root[data-theme="dark"] .app-tour-body {
+  border-color: #35483c;
+  color: var(--ink);
+  background: #1a251e;
+}
+
+:root[data-theme="dark"] .listing-form label,
+:root[data-theme="dark"] .edit-listing-form label,
+:root[data-theme="dark"] .detail-description,
+:root[data-theme="dark"] .detail-deposit > strong,
+:root[data-theme="dark"] .phone-consent-option strong,
+:root[data-theme="dark"] .profile-danger-zone h2,
+:root[data-theme="dark"] .edit-form-heading h2 {
+  color: var(--ink);
+}
+
+:root[data-theme="dark"] h1,
+:root[data-theme="dark"] h2,
+:root[data-theme="dark"] h3,
+:root[data-theme="dark"] h4,
+:root[data-theme="dark"] h5,
+:root[data-theme="dark"] h6,
+:root[data-theme="dark"] .wordmark,
+:root[data-theme="dark"] .listing-card h2,
+:root[data-theme="dark"] .listing-card-heading h2,
+:root[data-theme="dark"] .public-info-content section h2 {
+  color: var(--ink);
+}
+
+:root[data-theme="dark"] p,
+:root[data-theme="dark"] label,
+:root[data-theme="dark"] time,
+:root[data-theme="dark"] .listing-location,
+:root[data-theme="dark"] .browse-intro,
+:root[data-theme="dark"] .results-context,
+:root[data-theme="dark"] .public-info-content section p,
+:root[data-theme="dark"] .public-info-updated,
+:root[data-theme="dark"] .moderation-intro,
+:root[data-theme="dark"] .my-listings-intro,
+:root[data-theme="dark"] .detail-overview span,
+:root[data-theme="dark"] .listing-card-content .rent-period,
+:root[data-theme="dark"] .listing-card-stats p {
+  color: #afbeb3;
+}
+
+:root[data-theme="dark"] .eyebrow,
+:root[data-theme="dark"] .search-city-hint,
+:root[data-theme="dark"] .listing-card-content .listing-price strong,
+:root[data-theme="dark"] .public-info-review-note {
+  color: #8ed3a8;
+}
+
+:root[data-theme="dark"] input,
+:root[data-theme="dark"] textarea,
+:root[data-theme="dark"] select,
+:root[data-theme="dark"] .search-panel input,
+:root[data-theme="dark"] .search-panel select {
+  border-color: #43574a;
+  color: var(--ink);
+  background: #111a15;
+}
+
+:root[data-theme="dark"] input::placeholder,
+:root[data-theme="dark"] textarea::placeholder {
+  color: #829389;
+}
+
+:root[data-theme="dark"] input:disabled,
+:root[data-theme="dark"] select:disabled {
+  color: #87958a;
+  background: #202b24;
+}
+
+:root[data-theme="dark"] button.nav-button,
+:root[data-theme="dark"] .theme-toggle,
+:root[data-theme="dark"] .results-count,
+:root[data-theme="dark"] .applied-filter-chip,
+:root[data-theme="dark"] .listing-pagination button,
+:root[data-theme="dark"] .search-panel button.clear-filters-button,
+:root[data-theme="dark"] .profile-top-back,
+:root[data-theme="dark"] .back-button,
+:root[data-theme="dark"] .public-info-back,
+:root[data-theme="dark"] .demo-details-button,
+:root[data-theme="dark"] .demo-save-button {
+  border-color: #43574a;
+  color: #c4e5cf;
+  background: #202d24;
+}
+
+:root[data-theme="dark"] .listing-pagination button.is-current,
+:root[data-theme="dark"] .theme-toggle:hover {
+  color: #10251a;
+  background: #8ed3a8;
+}
+
+:root[data-theme="dark"] .status-pill,
+:root[data-theme="dark"] .listing-type,
+:root[data-theme="dark"] .listing-beds,
+:root[data-theme="dark"] .listing-audience-pill,
+:root[data-theme="dark"] .reaction-count,
+:root[data-theme="dark"] .photo-coverage-item {
+  border-color: #43574a;
+  color: #d2e3d6;
+  background: #26352b;
+}
+
+:root[data-theme="dark"] .message,
+:root[data-theme="dark"] .expiry-notice-message {
+  color: #b7e2c5;
+  background: #1b3423;
+}
+
+:root[data-theme="dark"] .demo-search,
+:root[data-theme="dark"] .demo-home-card,
+:root[data-theme="dark"] .demo-modal-panel {
+  border-color: #35483c;
+  color: var(--ink);
+  background: #1a251e;
+}
+
+:root[data-theme="dark"] .demo-preview-badge,
+:root[data-theme="dark"] .demo-home-meta span,
+:root[data-theme="dark"] .demo-modal-facts span,
+:root[data-theme="dark"] .app-tour-preview-tags span,
+:root[data-theme="dark"] .photo-coverage-item {
+  border-color: #43574a;
+  color: #c4d5c9;
+  background: #26352b;
+}
+
+:root[data-theme="dark"] .detail-back-button,
+:root[data-theme="dark"] button.detail-done,
+:root[data-theme="dark"] .listing-details-button,
+:root[data-theme="dark"] .app-tour-skip,
+:root[data-theme="dark"] .app-tour-controls .app-tour-back,
+:root[data-theme="dark"] .demo-search button,
+:root[data-theme="dark"] .demo-modal-close {
+  border-color: #43574a;
+  color: #c4e5cf;
+  background: #26352b;
+}
+
+:root[data-theme="dark"] .site-footer a,
+:root[data-theme="dark"] .site-footer button,
+:root[data-theme="dark"] .public-info-content a {
+  color: #8ed3a8;
 }
 
 .photo-gallery-count {

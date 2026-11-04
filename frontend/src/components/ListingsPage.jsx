@@ -43,7 +43,7 @@ function describeResults(filters, city) {
   return `Showing ${parts.join(" ")}`;
 }
 
-export default function ListingsPage({ token, userId, profile, preferredCity, onProfile, onSignOut, onMyListings, onInquiries, onModeration, onPublicPage, canModerate, active = true }) {
+export default function ListingsPage({ token, userId, profile, preferredCity, onProfile, onSignOut, onMyListings, onInquiries, onModeration, onPublicPage, canModerate, active = true, theme, onToggleTheme }) {
   const [keyword, setKeyword] = useState("");
   const [flatType, setFlatType] = useState("");
   const [listings, setListings] = useState([]);
@@ -448,6 +448,17 @@ export default function ListingsPage({ token, userId, profile, preferredCity, on
             {savedMode ? "Browse homes" : "Saved homes"}
           </button>
           <button className="nav-button nav-signout" onClick={onSignOut}>Sign out</button>
+          <button
+            type="button"
+            className="theme-toggle"
+            onClick={onToggleTheme}
+            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+            aria-pressed={theme === "dark"}
+            title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+          >
+            <span aria-hidden="true">{theme === "dark" ? "☀" : "☾"}</span>
+            {theme === "dark" ? "Light" : "Dark"}
+          </button>
         </nav>
       </header>
 

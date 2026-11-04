@@ -16,7 +16,25 @@ import "./App.css";
 
 const TOKEN_KEY = "roommitra_token";
 const TOUR_PENDING_KEY = "roommitra_tour_pending_user";
+const THEME_KEY = "roommitra_theme";
 const IS_DEMO_PREVIEW = new URLSearchParams(window.location.search).get("demo") === "1";
+
+function ThemeToggle({ theme, onToggle, fixed = false }) {
+  const isDark = theme === "dark";
+  return (
+    <button
+      type="button"
+      className={`theme-toggle${fixed ? " is-fixed" : ""}`}
+      onClick={onToggle}
+      aria-label={`Switch to ${isDark ? "light" : "dark"} theme`}
+      aria-pressed={isDark}
+      title={`Switch to ${isDark ? "light" : "dark"} theme`}
+    >
+      <span aria-hidden="true">{isDark ? "☀" : "☾"}</span>
+      {isDark ? "Light" : "Dark"}
+    </button>
+  );
+}
 
 function needsOnboarding(profile) {
   return !profile?.preferred_city ||
@@ -36,6 +54,7 @@ export default function App() {
   const [publicPage, setPublicPage] = useState(null);
   const [canModerate, setCanModerate] = useState(false);
   const [tourDismissed, setTourDismissed] = useState(false);
+  const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) === "dark" ? "dark" : "light");
 
   const navigateTo = useCallback((nextScreen) => {
     setVisitedScreens((current) => new Set(current).add(nextScreen));
@@ -46,6 +65,18 @@ export default function App() {
   const goToMyListings = useCallback(() => navigateTo("my-listings"), [navigateTo]);
   const goToInquiries = useCallback(() => navigateTo("inquiries"), [navigateTo]);
   const goToModeration = useCallback(() => navigateTo("moderation"), [navigateTo]);
+  const toggleTheme = useCallback(() => {
+    setTheme((current) => current === "dark" ? "light" : "dark");
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem(THEME_KEY, theme);
+    document.querySelector('meta[name="theme-color"]')?.setAttribute(
+      "content",
+      theme === "dark" ? "#101713" : "#f5f7f2",
+    );
+  }, [theme]);
 
   useEffect(() => {
     if (!token) return;
@@ -127,42 +158,63 @@ export default function App() {
     navigateTo("listings");
   }
 
-  if (IS_DEMO_PREVIEW) return <DemoPreview />;
+  if (IS_DEMO_PREVIEW) {
+    return (
+      <>
+        <ThemeToggle theme={theme} onToggle={toggleTheme} fixed />
+        <DemoPreview />
+      </>
+    );
+  }
 
   if (!token && !publicPage) {
     return (
-      <main className="page">
-        <AuthForm onSignedIn={signedIn} />
-        <SiteFooter onNavigate={setPublicPage} />
-      </main>
+      <>
+        <ThemeToggle theme={theme} onToggle={toggleTheme} fixed />
+        <main className="page">
+          <AuthForm onSignedIn={signedIn} />
+          <SiteFooter onNavigate={setPublicPage} />
+        </main>
+      </>
     );
   }
 
   if (!token && publicPage) {
     return (
-      <PublicInfoPage
-        page={publicPage}
-        onNavigate={setPublicPage}
-        onBack={() => setPublicPage(null)}
-      />
+      <>
+        <ThemeToggle theme={theme} onToggle={toggleTheme} fixed />
+        <PublicInfoPage
+          page={publicPage}
+          onNavigate={setPublicPage}
+          onBack={() => setPublicPage(null)}
+        />
+      </>
     );
   }
 
   if (!profile) {
-    return <main className="page"><p>Loading your profile…</p></main>;
+    return (
+      <>
+        <ThemeToggle theme={theme} onToggle={toggleTheme} fixed />
+        <main className="page"><p>Loading your profile…</p></main>
+      </>
+    );
   }
 
   if (needsOnboarding(profile)) {
     return (
-      <main className="page">
-        <ProfileForm
-          profile={profile}
-          token={token}
-          onSaved={setProfile}
-          onSignOut={signOut}
-          onboarding
-        />
-      </main>
+      <>
+        <ThemeToggle theme={theme} onToggle={toggleTheme} fixed />
+        <main className="page">
+          <ProfileForm
+            profile={profile}
+            token={token}
+            onSaved={setProfile}
+            onSignOut={signOut}
+            onboarding
+          />
+        </main>
+      </>
     );
   }
 
@@ -171,11 +223,17 @@ export default function App() {
   const showTour = pendingTourUser === String(profile.id) && !tourWasSeen && !tourDismissed;
 
   if (showTour) {
-    return <AppTour onSkip={finishTour} onFinish={finishTour} />;
+    return (
+      <>
+        <ThemeToggle theme={theme} onToggle={toggleTheme} fixed />
+        <AppTour onSkip={finishTour} onFinish={finishTour} />
+      </>
+    );
   }
 
   return (
     <>
+      <ThemeToggle theme={theme} onToggle={toggleTheme} fixed={screen !== "listings" || Boolean(publicPage)} />
       {publicPage && (
         <PublicInfoPage
           page={publicPage}
@@ -197,6 +255,8 @@ export default function App() {
           onSignOut={signOut}
           onPublicPage={setPublicPage}
           active={screen === "listings"}
+          theme={theme}
+          onToggleTheme={toggleTheme}
         />
       </div>
       {visitedScreens.has("my-listings") && (
