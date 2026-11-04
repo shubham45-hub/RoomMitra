@@ -8,6 +8,8 @@ export default function ListingCard({
   onContact,
   isSaved,
   onToggleSave,
+  loadingAction = "",
+  actionsDisabled = false,
   token,
   currentUserId,
   onReactionChange,
@@ -117,16 +119,20 @@ export default function ListingCard({
               type="button"
               className="owner-contact-button"
               onClick={() => onContact(listing.id)}
-              aria-label={`Contact ${listing.owner_name} about ${listing.title}`}
+              disabled={actionsDisabled}
+              aria-busy={loadingAction === "contact"}
+              aria-label={loadingAction === "contact" ? `Fetching contact details for ${listing.title}` : `Contact ${listing.owner_name} about ${listing.title}`}
             >
               {listing.owner_avatar_url
                 ? <img className="owner-avatar owner-avatar-image" src={getImageUrl(listing.owner_avatar_url)} alt="" />
                 : <span className="owner-avatar" aria-hidden="true">{(listing.owner_name || "R").charAt(0).toUpperCase()}</span>}
               <span className="owner-contact-copy">
-                <strong>{listing.owner_name}</strong>
-                <small>Contact lister</small>
+                <strong>{loadingAction === "contact" ? "Fetching lister…" : listing.owner_name}</strong>
+                <small>{loadingAction === "contact" ? "Connecting securely" : "Contact lister"}</small>
               </span>
-              <span className="owner-contact-arrow" aria-hidden="true">↗</span>
+              {loadingAction === "contact"
+                ? <span className="listing-action-spinner contact-action-spinner" aria-hidden="true" />
+                : <span className="owner-contact-arrow" aria-hidden="true">↗</span>}
             </button>
           ) : (
             <span className="owner-name">
@@ -144,8 +150,14 @@ export default function ListingCard({
           type="button"
           className="listing-details-button"
           onClick={() => onView(listing.id)}
+          disabled={actionsDisabled}
+          aria-busy={loadingAction === "details"}
         >
-          View details <span aria-hidden="true">→</span>
+          {loadingAction === "details" ? (
+            <><span className="listing-action-label"><span className="listing-action-spinner" aria-hidden="true" /> Loading listing details…</span><span aria-hidden="true">···</span></>
+          ) : (
+            <>View details <span aria-hidden="true">→</span></>
+          )}
         </button>
       </div>
     </article>

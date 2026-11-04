@@ -4,6 +4,7 @@ import ListingCard from "./ListingCard";
 import ListingDetails from "./ListingDetails";
 import ExpiryNotification from "./ExpiryNotification";
 import SiteFooter from "./SiteFooter";
+import { ListingsFetchError, ListingsLoadingState } from "./ListingRequestState";
 import { getImageUrl } from "../services/api";
 import {
   getListing,
@@ -59,8 +60,11 @@ export default function ListingsPage({ token, userId, profile, preferredCity, on
   const [nextOffset, setNextOffset] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [message, setMessage] = useState("");
+  const [listingsError, setListingsError] = useState("");
+  const [loadMoreError, setLoadMoreError] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [selectedListing, setSelectedListing] = useState(null);
+  const [pendingListingAction, setPendingListingAction] = useState(null);
   const [contactFirst, setContactFirst] = useState(false);
   const [contactLaunch, setContactLaunch] = useState(null);
   const [savedListings, setSavedListings] = useState([]);
@@ -104,6 +108,9 @@ export default function ListingsPage({ token, userId, profile, preferredCity, on
   }, []);
 
   async function viewListing(id, openContactFirst = false) {
+    if (pendingListingAction) return;
+    setPendingListingAction({ listingId: id, type: openContactFirst ? "contact" : "details" });
+    setMessage("");
     try {
       const listing = await getListing(id, token);
       try {
@@ -128,6 +135,8 @@ export default function ListingsPage({ token, userId, profile, preferredCity, on
       setContactLaunch(openContactFirst ? { ownerContact: directContact, contactError: directContactError } : null);
     } catch (error) {
       setMessage(error.message);
+    } finally {
+      setPendingListingAction(null);
     }
   }
 
@@ -136,6 +145,8 @@ export default function ListingsPage({ token, userId, profile, preferredCity, on
     setSavedMode(false);
     setLoading(true);
     setMessage("");
+    setListingsError("");
+    setLoadMoreError("");
 
     const filters = { keyword, city: preferredCity, flatType, locality, minRent, maxRent, minBeds, furnishingStatus, availability, sort, ...overrides };
     const hasOtherFilters = [filters.keyword, filters.flatType, filters.locality, filters.minRent, filters.maxRent, filters.minBeds, filters.furnishingStatus, filters.availability]
@@ -168,7 +179,7 @@ export default function ListingsPage({ token, userId, profile, preferredCity, on
         sort: filters.sort,
       });
     } catch (error) {
-      setMessage(error.message);
+      setListingsError(error.message);
     } finally {
       setLoading(false);
     }
@@ -206,6 +217,8 @@ export default function ListingsPage({ token, userId, profile, preferredCity, on
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setListingsError("");
 
     getListings({
       token,
@@ -222,7 +235,7 @@ export default function ListingsPage({ token, userId, profile, preferredCity, on
         }
       })
       .catch((error) => {
-        if (!cancelled) setMessage(error.message);
+        if (!cancelled) setListingsError(error.message);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -294,6 +307,7 @@ export default function ListingsPage({ token, userId, profile, preferredCity, on
   async function loadMore() {
     if (loadingMore || !hasMore || savedMode) return;
     setLoadingMore(true);
+    setLoadMoreError("");
     setMessage("");
     try {
       const items = await getListings({
@@ -306,7 +320,7 @@ export default function ListingsPage({ token, userId, profile, preferredCity, on
       setNextOffset((current) => current + items.length);
       setHasMore(items.length === PAGE_SIZE);
     } catch (error) {
-      setMessage(error.message);
+      setLoadMoreError(error.message);
     } finally {
       setLoadingMore(false);
     }
@@ -519,49 +533,65 @@ export default function ListingsPage({ token, userId, profile, preferredCity, on
         {message && <p className="message" role="status">{message}</p>}
 
         {loading ? (
-          <p className="empty-state">Finding available listings…</p>
-        ) : visibleListings.length ? (
-          <div className="listing-grid">
-            {visibleListings.map((listing) => (
-              <ListingCard
-                key={listing.id}
-                listing={listing}
-                onView={viewListing}
-                onContact={(listingId) => viewListing(listingId, true)}
-                isSaved={savedListings.some((saved) => saved.id === listing.id)}
-                onToggleSave={toggleSave}
-                token={token}
-                currentUserId={userId}
-                onReactionChange={(listingId, reaction) => {
-                  setListings((current) => current.map((item) => item.id === listingId ? { ...item, ...reaction } : item));
-                  setSavedListings((current) => current.map((item) => item.id === listingId ? { ...item, ...reaction } : item));
-                }}
-              />
-            ))}
-          </div>
+          <ListingsLoadingState />
         ) : (
-          <div className="empty-state">
-            <span className="empty-icon">⌂</span>
-            <h3>
-              {savedMode
-                ? "No saved listings yet"
-                : appliedFilterItems.length
-                  ? "No listings match these filters"
-                  : "No listings found yet"}
-            </h3>
-            <p>
-              {savedMode
-                ? "Save a home you like and it will appear here."
-                : appliedFilterItems.length
-                  ? "Try removing a filter or clear all filters to see more homes."
-                  : "Check back as new homes are added in your city."}
-            </p>
-            {!savedMode && appliedFilterItems.length > 0 && (
-              <button type="button" className="clear-empty-filters" onClick={clearFilters} disabled={loading}>
-                Clear all filters
-              </button>
+          <>
+            {!savedMode && listingsError && (
+              <ListingsFetchError
+                detail={listingsError}
+                onRetry={() => void search()}
+              />
             )}
-          </div>
+            {visibleListings.length ? (
+              <div className="listing-grid">
+                {visibleListings.map((listing) => (
+                  <ListingCard
+                    key={listing.id}
+                    listing={listing}
+                    onView={viewListing}
+                    onContact={(listingId) => viewListing(listingId, true)}
+                    isSaved={savedListings.some((saved) => saved.id === listing.id)}
+                    onToggleSave={toggleSave}
+                    loadingAction={pendingListingAction?.listingId === listing.id ? pendingListingAction.type : ""}
+                    actionsDisabled={Boolean(pendingListingAction)}
+                    token={token}
+                    currentUserId={userId}
+                    onReactionChange={(listingId, reaction) => {
+                      setListings((current) => current.map((item) => item.id === listingId ? { ...item, ...reaction } : item));
+                      setSavedListings((current) => current.map((item) => item.id === listingId ? { ...item, ...reaction } : item));
+                    }}
+                  />
+                ))}
+              </div>
+            ) : !savedMode && listingsError ? null : (
+              <div className="empty-state">
+                <span className="empty-icon">⌂</span>
+                <h3>
+                  {savedMode
+                    ? "No saved listings yet"
+                    : appliedFilterItems.length
+                      ? "No listings match these filters"
+                      : "No listings found yet"}
+                </h3>
+                <p>
+                  {savedMode
+                    ? "Save a home you like and it will appear here."
+                    : appliedFilterItems.length
+                      ? "Try removing a filter or clear all filters to see more homes."
+                      : "Check back as new homes are added in your city."}
+                </p>
+                {!savedMode && appliedFilterItems.length > 0 && (
+                  <button type="button" className="clear-empty-filters" onClick={clearFilters} disabled={loading}>
+                    Clear all filters
+                  </button>
+                )}
+              </div>
+            )}
+            {loadMoreError && (
+              <ListingsFetchError detail={loadMoreError} onRetry={() => void loadMore()} />
+            )}
+            {loadingMore && <ListingsLoadingState count={2} compact />}
+          </>
         )}
         {!savedMode && !loading && listings.length > 0 && hasMore && (
           <button className="load-more-button" type="button" onClick={loadMore} disabled={loadingMore}>

@@ -8,30 +8,44 @@ import {
 import EditListingForm from "./EditListingForm";
 import PhotoGallery from "./PhotoGallery";
 import ListingReaction from "./ListingReaction";
+import { ListingsFetchError, ListingsLoadingState } from "./ListingRequestState";
 
 export default function MyListingsPage({ token, userId, onBack }) {
   const [listings, setListings] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [listingsError, setListingsError] = useState("");
   const [message, setMessage] = useState("");
   const [busyId, setBusyId] = useState(null);
   const [editingId, setEditingId] = useState(null);
 
-  async function loadListings() {
+  async function loadListings(showLoading = false) {
+    if (showLoading) setLoading(true);
+    setListingsError("");
     try {
       setListings(await getMyListings(token));
+      return true;
     } catch (error) {
-      setMessage(error.message);
+      setListingsError(error.message);
+      return false;
+    } finally {
+      if (showLoading) setLoading(false);
     }
   }
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setListingsError("");
 
     getMyListings(token)
       .then((items) => {
         if (!cancelled) setListings(items);
       })
       .catch((error) => {
-        if (!cancelled) setMessage(error.message);
+        if (!cancelled) setListingsError(error.message);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
 
     return () => {
@@ -50,8 +64,9 @@ export default function MyListingsPage({ token, userId, onBack }) {
       } else {
         await updateListing(token, listing.id, { status: nextStatus });
       }
-      await loadListings();
-      setMessage(listing.is_expired ? "Listing renewed for 30 days and published." : `Listing ${nextStatus === "ACTIVE" ? "published" : "paused"}.`);
+      if (await loadListings()) {
+        setMessage(listing.is_expired ? "Listing renewed for 30 days and published." : `Listing ${nextStatus === "ACTIVE" ? "published" : "paused"}.`);
+      }
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -64,8 +79,9 @@ export default function MyListingsPage({ token, userId, onBack }) {
     setMessage("");
     try {
       await updateListing(token, listing.id, { status: "FILLED" });
-      await loadListings();
-      setMessage("Listing marked as filled and removed from search results.");
+      if (await loadListings()) {
+        setMessage("Listing marked as filled and removed from search results.");
+      }
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -83,8 +99,9 @@ export default function MyListingsPage({ token, userId, onBack }) {
 
     try {
       await deleteListing(token, listing.id);
-      await loadListings();
-      setMessage("Listing deleted.");
+      if (await loadListings()) {
+        setMessage("Listing deleted.");
+      }
     } catch (error) {
       setMessage(error.message);
     } finally {
@@ -110,15 +127,25 @@ export default function MyListingsPage({ token, userId, onBack }) {
         </p>
 
         {message && <p className="message" role="status">{message}</p>}
+        {loading ? (
+          <ListingsLoadingState variant="my-listings" count={4} />
+        ) : (
+          <>
+            {listingsError && (
+              <ListingsFetchError
+                detail={listingsError}
+                onRetry={() => void loadListings(true)}
+              />
+            )}
 
-      {listings.length === 0 ? (
-        <div className="empty-state">
-          <h3>You haven’t posted a listing yet</h3>
-          <p>Your listings will appear here after you publish them.</p>
-        </div>
-      ) : (
-        <div className="my-listings-grid">
-          {listings.map((listing) => (
+            {listings.length === 0 && !listingsError ? (
+              <div className="empty-state">
+                <h3>You haven’t posted a listing yet</h3>
+                <p>Your listings will appear here after you publish them.</p>
+              </div>
+            ) : listings.length > 0 ? (
+              <div className="my-listings-grid">
+                {listings.map((listing) => (
             <article className="my-listing-card" key={listing.id}>
             {editingId === listing.id ? (
                 <>
@@ -129,8 +156,7 @@ export default function MyListingsPage({ token, userId, onBack }) {
                     onCancel={() => setEditingId(null)}
                     onSaved={async () => {
                     setEditingId(null);
-                    await loadListings();
-                    setMessage("Listing updated.");
+                    if (await loadListings()) setMessage("Listing updated.");
                     }}
                 />
                 </>
@@ -203,8 +229,10 @@ export default function MyListingsPage({ token, userId, onBack }) {
                 </>
             )}
             </article>
-          ))}
-        </div>
+                ))}
+              </div>
+            ) : null}
+          </>
         )}
       </div>
     </main>

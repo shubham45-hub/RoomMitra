@@ -16,10 +16,24 @@ export async function apiRequest(path, { token, onResponse, ...options } = {}) {
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const response = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  let response;
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      ...options,
+      headers,
+      ...(!options.signal && (options.method || "GET").toUpperCase() === "GET"
+        ? { signal: AbortSignal.timeout(30_000) }
+        : {}),
+    });
+  } catch (error) {
+    if (error?.name === "TimeoutError") {
+      throw new Error("The server is taking longer than expected. Please try again.");
+    }
+    if (error instanceof TypeError) {
+      throw new Error("Couldn’t connect to RoomMitra. Check your connection and try again.");
+    }
+    throw error;
+  }
 
   onResponse?.(response);
 

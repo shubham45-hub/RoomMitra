@@ -10,10 +10,22 @@ import PublicInfoPage from "./components/PublicInfoPage";
 import SiteFooter from "./components/SiteFooter";
 import { getModerationAccess } from "./services/listings";
 import DemoPreview from "./components/DemoPreview";
+import AppTour from "./components/AppTour";
 import "./App.css";
 
 const TOKEN_KEY = "roommitra_token";
+const TOUR_PENDING_KEY = "roommitra_tour_pending_user";
 const IS_DEMO_PREVIEW = new URLSearchParams(window.location.search).get("demo") === "1";
+
+function needsOnboarding(profile) {
+  return !profile?.preferred_city ||
+    !profile?.email ||
+    !profile?.sex ||
+    !profile?.religion ||
+    !profile?.origin_state ||
+    !profile?.name ||
+    profile.name === "RoomMitra user";
+}
 
 export default function App() {
   const [token, setToken] = useState(() => IS_DEMO_PREVIEW ? null : sessionStorage.getItem(TOKEN_KEY));
@@ -21,6 +33,7 @@ export default function App() {
   const [screen, setScreen] = useState("listings");
   const [publicPage, setPublicPage] = useState(null);
   const [canModerate, setCanModerate] = useState(false);
+  const [tourDismissed, setTourDismissed] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -62,17 +75,34 @@ export default function App() {
 
   function signedIn(accessToken, user) {
     sessionStorage.setItem(TOKEN_KEY, accessToken);
+    if (user?.id && needsOnboarding(user)) {
+      sessionStorage.setItem(TOUR_PENDING_KEY, String(user.id));
+    } else {
+      sessionStorage.removeItem(TOUR_PENDING_KEY);
+    }
     setToken(accessToken);
     setProfile(user);
     setCanModerate(false);
+    setTourDismissed(false);
     setScreen("listings");
   }
 
   function signOut() {
     sessionStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(TOUR_PENDING_KEY);
     setToken(null);
     setProfile(null);
     setCanModerate(false);
+    setTourDismissed(false);
+  }
+
+  function finishTour() {
+    if (profile?.id) {
+      localStorage.setItem(`roommitra_tour_seen_${profile.id}`, "true");
+    }
+    sessionStorage.removeItem(TOUR_PENDING_KEY);
+    setTourDismissed(true);
+    setScreen("listings");
   }
 
   if (IS_DEMO_PREVIEW) return <DemoPreview />;
@@ -100,16 +130,7 @@ export default function App() {
     return <main className="page"><p>Loading your profile…</p></main>;
   }
 
-  const needsOnboarding =
-    !profile.preferred_city ||
-    !profile.email ||
-    !profile.sex ||
-    !profile.religion ||
-    !profile.origin_state ||
-    !profile.name ||
-    profile.name === "RoomMitra user";
-
-  if (needsOnboarding) {
+  if (needsOnboarding(profile)) {
     return (
       <main className="page">
         <ProfileForm
@@ -121,6 +142,14 @@ export default function App() {
         />
       </main>
     );
+  }
+
+  const pendingTourUser = sessionStorage.getItem(TOUR_PENDING_KEY);
+  const tourWasSeen = localStorage.getItem(`roommitra_tour_seen_${profile.id}`) === "true";
+  const showTour = pendingTourUser === String(profile.id) && !tourWasSeen && !tourDismissed;
+
+  if (showTour) {
+    return <AppTour onSkip={finishTour} onFinish={finishTour} />;
   }
 
   if (screen === "my-listings") {
