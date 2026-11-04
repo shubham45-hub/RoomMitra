@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+import secrets
 from datetime import datetime, timedelta, timezone
 
 import jwt
@@ -13,15 +14,35 @@ from app.models import User
 
 bearer_scheme = HTTPBearer()
 optional_bearer_scheme = HTTPBearer(auto_error=False)
+PASSWORD_HASH_ITERATIONS = 600_000
 
 
 def _jwt_secret() -> str:
     return settings.jwt_secret_key or "development-only-change-me"
 
 
-def hash_otp(phone: str, code: str) -> str:
-    secret = settings.otp_hmac_secret or "development-only-change-me"
-    return hmac.new(secret.encode(), f"{phone}:{code}".encode(), hashlib.sha256).hexdigest()
+def hash_password(password: str) -> str:
+    salt = secrets.token_bytes(16)
+    password_hash = hashlib.pbkdf2_hmac(
+        "sha256", password.encode(), salt, PASSWORD_HASH_ITERATIONS
+    )
+    return f"pbkdf2_sha256${PASSWORD_HASH_ITERATIONS}${salt.hex()}${password_hash.hex()}"
+
+
+def verify_password(password: str, encoded_hash: str | None) -> bool:
+    if not encoded_hash:
+        return False
+    try:
+        algorithm, iterations, salt_hex, hash_hex = encoded_hash.split("$")
+        if algorithm != "pbkdf2_sha256" or int(iterations) != PASSWORD_HASH_ITERATIONS:
+            return False
+        expected_hash = bytes.fromhex(hash_hex)
+        actual_hash = hashlib.pbkdf2_hmac(
+            "sha256", password.encode(), bytes.fromhex(salt_hex), int(iterations)
+        )
+    except (ValueError, TypeError):
+        return False
+    return hmac.compare_digest(actual_hash, expected_hash)
 
 
 def create_access_token(user_id: int) -> str:
@@ -59,5 +80,3 @@ def get_optional_current_user(
     if credentials is None:
         return None
     return get_current_user(credentials, db)
-
-

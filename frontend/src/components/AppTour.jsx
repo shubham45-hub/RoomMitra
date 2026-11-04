@@ -23,7 +23,7 @@ const tourSteps = [
     eyebrow: "SAVE & CONNECT",
     icon: "♡",
     title: "Keep favourites close and contact the lister.",
-    description: "Save homes to revisit later, then open a listing to ask the lister a question. Your verified phone is shared only when you agree.",
+    description: "Save homes to revisit later, then open a listing to ask the lister a question. Your phone number is shared only when you agree.",
     previewLabel: "A BETTER WAY TO CONNECT",
     previewTitle: "Message the lister",
     previewTags: ["Saved homes", "Verified contact", "Your choice"],

@@ -3,13 +3,13 @@
 ## Local setup (PowerShell)
 
 1. Activate the backend virtual environment and install dependencies: `pip install -r requirements.txt`.
-2. Copy `.env.example` to `.env`; set the PostgreSQL URL and two independent random secrets (at least 32 characters outside development). Keep `.env` private.
+2. Copy `.env.example` to `.env`; set the PostgreSQL URL and a random JWT secret (at least 32 characters outside development). Keep `.env` private.
 3. Apply pending additive migrations: `alembic upgrade head`.
 4. Start the API from `backend`: `uvicorn app.main:app --reload`.
-5. Request a code with `POST /auth/otp/request` and JSON `{"phone":"9876543210"}`. In development, the code is logged by the backend. Verify with `POST /auth/otp/verify` and JSON `{"phone":"9876543210","code":"123456"}`.
+5. Create an account with `POST /auth/signup` and JSON `{"name":"Your Name","phone":"9876543210","password":"at-least-8-characters"}`. Sign in with `POST /auth/signin` and JSON `{"phone":"9876543210","password":"at-least-8-characters"}`.
 6. Run unit tests with `pytest`.
 
-After OTP verification, users complete their name, email, preferred city, sex, religion, and origin state once. They can optionally upload a profile picture. Browse and filter results use the saved city, while listing audience settings control gender matching; users can update their profile later. Without Neon Object Storage credentials, photos are stored locally under `uploads/` during development.
+After signing up, users can complete their email, preferred city, sex, religion, and origin state once. They can optionally upload a profile picture. Browse and filter results use the saved city, while listing audience settings control gender matching; users can update their profile later. Without Neon Object Storage credentials, photos are stored locally under `uploads/` during development.
 
 ## Neon setup
 
@@ -19,7 +19,7 @@ The API continues to use SQLAlchemy with psycopg 3. It reads the pooled `DATABAS
 
 When the Neon `AWS_*` variables and `NEON_STORAGE_BUCKET=assets` are available, profile and listing photos use the private Neon Object Storage bucket. The API returns signed read URLs that expire after seven days and deletes uploaded objects when users remove images or accounts. Without those credentials, local development falls back to `UPLOAD_DIR`.
 
-Phone OTP continues to use the existing local provider when `APP_ENV=development`; the code is returned to the UI and no SMS is sent. The Neon Auth service is provisioned on the branch but is not the app's sign-in provider, so it does not replace RoomMitra's existing phone OTP flow. The deployed `hello` Function is a separate Neon service; the FastAPI API remains the app's REST backend.
+RoomMitra signs users up and in with an Indian mobile number and password. Passwords are stored as salted PBKDF2 hashes; production requires a `JWT_SECRET_KEY` of at least 32 characters. The Neon Auth service is provisioned on the branch but is not the app's sign-in provider. The deployed `hello` Function is a separate Neon service; the FastAPI API remains the app's REST backend.
 
 Each listing has an audience setting: men, women, or anyone. Browse, saved listings, listing details, and contact actions enforce this choice. The audience migration backfills old listings from the lister's sex to preserve their previous visibility where that profile detail exists; listings without it remain visible to anyone.
 
@@ -39,12 +39,8 @@ Each listing also shows its total unique contacts: users who sent an inquiry or 
 
 Signed-in users can like or dislike listings they do not own. Each person has one reaction per listing; clicking the same reaction again removes it, and choosing the other reaction switches their vote. The listing owner sees both totals but cannot vote on their own listing.
 
-Migrations preserve existing rows. Do not create or alter tables with SQLAlchemy `create_all`; use Alembic. Listing photos are stored locally under `uploads/` during development and are ignored by Git. Enquiries are stored in PostgreSQL, and the sender must consent to share their verified phone number before the lister can reply.
+Migrations preserve existing rows. Do not create or alter tables with SQLAlchemy `create_all`; use Alembic. Listing photos are stored locally under `uploads/` during development and are ignored by Git. Enquiries are stored in PostgreSQL, and the sender must consent to share their phone number before the lister can reply.
 
 Listings support up to 12 photos each. The upload form groups them by hall, kitchen, washroom, bedroom, and other areas; existing listings' photos are kept and categorized as other areas when the photo-category migration is applied.
 
 Each listing records whether its rent is per person or for the whole flat. For whole-flat rent, the app displays an approximate equal split across current residents and incoming flatmates.
-
-OTP delivery uses local-only codes in development and Twilio SMS in any non-development environment. For deployment, set `APP_ENV=production`, `SMS_PROVIDER=twilio`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and exactly one sender setting: `TWILIO_FROM_NUMBER` or `TWILIO_MESSAGING_SERVICE_SID`. Set `OTP_SMS_TEMPLATE` to a text that includes `{code}` and `{minutes}`. Keep all credentials in your hosting provider's secret environment settings, never in Git. Production startup fails closed when Twilio is not configured, and the API never returns or logs the OTP outside development.
-
-Twilio trial accounts may restrict delivery to numbers that you have verified. Twilio's published India rate is currently $0.0832 per outbound SMS segment, with possible carrier fees; rates can change. Twilio documents an international route that does not require DLT registration, and a domestic route that requires DLT registration for the entity and sender ID. For domestic delivery, the OTP message must use an approved DLT content template and registered sender ID. Complete the account, sender, and template setup before production launch.

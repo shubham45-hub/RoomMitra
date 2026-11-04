@@ -257,7 +257,7 @@ function ListingDetails({ listing, token, currentUserId, onClose, onContactCount
                     required
                   />
                   <span>
-                    <strong>Share my verified number</strong>
+                    <strong>Share my phone number</strong>
                     <small>The lister can call or WhatsApp you about this enquiry.</small>
                   </span>
                 </label>

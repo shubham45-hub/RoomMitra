@@ -372,7 +372,7 @@ def create_listing_inquiry(
     if listing.user_id == user.id:
         raise HTTPException(400, "You cannot send an inquiry about your own listing")
     if not data.share_phone:
-        raise HTTPException(400, "Please agree to share your verified phone number so the lister can reply")
+        raise HTTPException(400, "Please agree to share your phone number so the lister can reply")
     message = data.message.strip()
     if len(message) < 10:
         raise HTTPException(422, "Your message must contain at least 10 non-space characters")
@@ -474,7 +474,7 @@ def get_listing_contact(
     if listing.user_id == user.id:
         raise HTTPException(400, "This is your listing")
     if not listing.owner.phone:
-        raise HTTPException(404, "The lister has no verified phone number available")
+        raise HTTPException(404, "The lister has no phone number available")
     return {"owner_name": listing.owner.name, "phone": listing.owner.phone}
 
 

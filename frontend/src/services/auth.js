@@ -1,15 +1,15 @@
 import { apiRequest } from "./api";
 
-export function requestOtp(phone) {
-  return apiRequest("/auth/otp/request", {
+export function signUp({ name, phone, password }) {
+  return apiRequest("/auth/signup", {
     method: "POST",
-    body: JSON.stringify({ phone }),
+    body: JSON.stringify({ name, phone, password }),
   });
 }
 
-export function verifyOtp(phone, code) {
-  return apiRequest("/auth/otp/verify", {
+export function signIn(phone, password) {
+  return apiRequest("/auth/signin", {
     method: "POST",
-    body: JSON.stringify({ phone, code }),
+    body: JSON.stringify({ phone, password }),
   });
 }

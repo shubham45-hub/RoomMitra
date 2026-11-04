@@ -1,21 +1,23 @@
-import secrets
-from datetime import datetime, timedelta, timezone
 import io
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
+from sqlalchemy.exc import IntegrityError
 from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
-from app.models import OtpChallenge, User
-from app.services.delivery import get_otp_delivery
+from app.models import User
 from app.services.object_storage import delete_upload, resolve_upload_url, save_upload
 from app.services.phone import normalize_indian_phone
-from app.services.security import create_access_token, get_current_user, hash_otp
+from app.services.security import (
+    create_access_token,
+    get_current_user,
+    hash_password,
+    verify_password,
+)
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 PROFILE_IMAGE_DIR = settings.upload_dir / "profiles"
@@ -24,12 +26,15 @@ MAX_PROFILE_IMAGE_BYTES = 5 * 1024 * 1024
 PROFILE_IMAGE_FORMATS = {"JPEG": ".jpg", "PNG": ".png", "WEBP": ".webp"}
 
 
-class OtpRequest(BaseModel):
+class SignUp(BaseModel):
     phone: str = Field(min_length=10, max_length=16)
+    name: str = Field(min_length=1, max_length=100)
+    password: str = Field(min_length=8, max_length=128)
 
 
-class OtpVerify(OtpRequest):
-    code: str = Field(pattern=r"^\d{6}$")
+class SignIn(BaseModel):
+    phone: str = Field(min_length=10, max_length=16)
+    password: str = Field(min_length=1, max_length=128)
 
 
 class ProfileUpdate(BaseModel):
@@ -47,69 +52,53 @@ def profile_data(user: User):
             "origin_state": user.origin_state, "avatar_url": resolve_upload_url(user.avatar_url)}
 
 
-@router.post("/otp/request", status_code=202)
-def request_otp(body: OtpRequest, request: Request, db: Session = Depends(get_db)):
-    phone = normalize_indian_phone(body.phone)
-    now = datetime.now(timezone.utc)
-    recent = db.query(OtpChallenge).filter(
-        OtpChallenge.phone == phone,
-        OtpChallenge.created_at >= now - timedelta(hours=1),
-    ).count()
-    if recent >= settings.otp_requests_per_hour:
-        raise HTTPException(429, "Too many OTP requests; try again later")
-    prior = db.query(OtpChallenge).filter(OtpChallenge.phone == phone).order_by(desc(OtpChallenge.created_at)).first()
-    if prior and prior.next_send_at > now:
-        raise HTTPException(429, "Please wait before requesting another code")
-    code = f"{secrets.randbelow(1_000_000):06d}"
-    challenge = OtpChallenge(
-        phone=phone,
-        code_hash=hash_otp(phone, code),
-        created_at=now,
-        expires_at=now + timedelta(seconds=settings.otp_ttl_seconds),
-        next_send_at=now + timedelta(seconds=settings.otp_resend_seconds),
-    )
-    db.add(challenge)
-    db.commit()
-    try:
-        get_otp_delivery().send(phone, code)
-    except Exception as exc:
-        db.delete(challenge)
-        db.commit()
-        raise HTTPException(503, "Could not send the verification code. Please try again later.") from exc
-    response = {"detail": "If the number can receive a code, one has been sent."}
-    if settings.app_env == "development":
-        response["development_otp"] = code
-    return response
-
-
-@router.post("/otp/verify")
-def verify_otp(body: OtpVerify, db: Session = Depends(get_db)):
-    phone = normalize_indian_phone(body.phone)
-    now = datetime.now(timezone.utc)
-    challenge = db.query(OtpChallenge).filter(
-        OtpChallenge.phone == phone,
-        OtpChallenge.consumed_at.is_(None),
-    ).order_by(desc(OtpChallenge.created_at)).first()
-    if not challenge or challenge.expires_at <= now or challenge.attempts >= settings.otp_max_attempts:
-        raise HTTPException(400, "Invalid or expired code")
-    challenge.attempts += 1
-    if not secrets.compare_digest(challenge.code_hash, hash_otp(phone, body.code)):
-        if challenge.attempts >= settings.otp_max_attempts:
-            challenge.consumed_at = now
-        db.commit()
-        raise HTTPException(400, "Invalid or expired code")
-    challenge.consumed_at = now
-    user = db.query(User).filter(User.phone == phone).first()
-    if not user:
-        user = User(phone=phone, name="RoomMitra user", is_active=True)
-        db.add(user)
-    db.commit()
-    db.refresh(user)
+def auth_response(user: User):
     return {
         "access_token": create_access_token(user.id),
         "token_type": "bearer",
         "user": profile_data(user),
     }
+
+
+@router.post("/signup", status_code=status.HTTP_201_CREATED)
+def sign_up(body: SignUp, db: Session = Depends(get_db)):
+    phone = normalize_indian_phone(body.phone)
+    if db.query(User.id).filter(User.phone == phone).first():
+        raise HTTPException(status.HTTP_409_CONFLICT, "An account with this mobile number already exists")
+
+    name = body.name.strip()
+    if not name:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Name cannot be blank")
+
+    user = User(
+        phone=phone,
+        name=name,
+        password_hash=hash_password(body.password),
+        is_active=True,
+    )
+    db.add(user)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "An account with this mobile number already exists"
+        ) from exc
+    db.refresh(user)
+    return auth_response(user)
+
+
+@router.post("/signin")
+def sign_in(body: SignIn, db: Session = Depends(get_db)):
+    phone = normalize_indian_phone(body.phone)
+    user = db.query(User).filter(User.phone == phone).first()
+    if user is None or not user.is_active or not verify_password(body.password, user.password_hash):
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED,
+            "Invalid mobile number or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return auth_response(user)
 
 
 @router.get("/me")
@@ -130,7 +119,6 @@ def delete_profile(
         if photo.image_url
     ]
 
-    db.query(OtpChallenge).filter(OtpChallenge.phone == user.phone).delete(synchronize_session=False)
     db.delete(user)
     db.commit()
 

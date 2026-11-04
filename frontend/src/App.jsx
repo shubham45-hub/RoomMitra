@@ -88,7 +88,7 @@ export default function App() {
         setProfile((currentProfile) => {
           if (!currentProfile) return loadedProfile;
           const merged = { ...currentProfile, ...loadedProfile };
-          // Keep profile fields from OTP verification if a briefly stale API
+          // Keep profile fields from authentication if a briefly stale API
           // response does not include fields added by a newer backend version.
           for (const key of ["email", "preferred_city", "sex", "religion", "origin_state", "avatar_url"]) {
             if (loadedProfile[key] == null && currentProfile[key] != null) {
