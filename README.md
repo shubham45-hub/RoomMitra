@@ -5,6 +5,7 @@ RoomMitra is a room and flatmate listing app built with React, FastAPI, and Post
 ## Features
 
 - Indian mobile number and password sign-up/sign-in
+- Forgot-password recovery by short-lived SMS code
 - First-login setup for email and preferred search city
 - Create, search, edit, pause, mark filled, and save listings; filled homes stay visible with their status
 - Let listers choose whether a room is for men, women, or anyone; matching users can browse and contact it
@@ -26,7 +27,7 @@ RoomMitra is a room and flatmate listing app built with React, FastAPI, and Post
 See [backend/README.md](backend/README.md) and [frontend/README.md](frontend/README.md) for setup instructions. Copy `.env.example` to `.env` for local Docker credentials, and keep `.env` files private.
 After signing up with a name, mobile number, and password, users can complete their email, preferred city, sex, religion, and origin state in onboarding, with an optional profile picture. Listing browse is restricted to listers of the same sex as the signed-in user. These profile details can be changed from **My profile**.
 
-Existing accounts created through OTP do not have a password and cannot sign in after this authentication change. Provide a verified password-reset/migration flow for those accounts before upgrading an installation that has active users.
+Existing accounts created through OTP can set a password using the SMS recovery flow. Configure the production SMS provider before deployment; older accounts can only recover if they still control the registered mobile number.
 
 ## Public information and launch preparation
 
@@ -36,6 +37,7 @@ The frontend includes About, Privacy, Terms, and Copyright & reports pages, link
 - Verify licenses/permissions for every photo, icon, font, map, illustration, and code sample. Keep a record of sources and license terms; replace assets whose rights are unclear.
 - Configure production secrets, HTTPS, exact allowed frontend origins, PostgreSQL backups, persistent private photo storage, upload limits/scanning, and monitoring. Never deploy local `.env` credentials.
 - Configure and verify authentication abuse controls. Run and review Alembic migrations against a backed-up production database; do not use `create_all` for production schema changes.
+- Configure SMS provider credentials for password recovery. SMS codes are not used for sign-in.
 - Test sign-up, sign-in, profile deletion, listing/photo deletion, contact sharing, user reports, copyright reports, and moderation with production-like settings before launch.
 
 Copyright notice: © 2026 RoomMitra. All rights reserved. Third-party materials remain subject to their owners' licenses and notices.
@@ -59,7 +61,7 @@ The repository now includes production Dockerfiles, an Nginx SPA server, and a C
    Migrations are run as an explicit release step; the API container does not run schema changes automatically. The Compose file keeps PostgreSQL data, uploaded photos, and Caddy certificates in named persistent volumes. Back up all three where needed, and do not use `docker compose down -v` on a live deployment.
 4. Check `https://roommitra.example.com`, `https://api.roommitra.example.com/health`, and sign-in, uploads, account deletion, and moderation. Update the frontend image whenever `VITE_API_BASE_URL` changes because Vite embeds it at build time.
 
-The sample values are placeholders. Production startup deliberately fails without exact CORS/host settings and a strong JWT secret. Complete legal and asset review above before accepting public users.
+The sample values are placeholders. Production startup deliberately fails without exact CORS/host settings, strong JWT/reset-code secrets, and SMS provider configuration for account recovery. Complete legal and asset review above before accepting public users.
 
 ## Free Vercel demo setup
 

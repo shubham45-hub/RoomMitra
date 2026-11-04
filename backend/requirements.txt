@@ -10,5 +10,6 @@ pillow
 boto3
 pyjwt
 email-validator
+twilio
 pytest
 httpx

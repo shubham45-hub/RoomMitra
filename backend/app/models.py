@@ -21,9 +21,24 @@ class User(Base):
     avatar_url = Column(String(500), nullable=True)
     phone = Column(String(20), unique=True, index=True, nullable=True)
     password_hash = Column(String(255), nullable=True)
+    password_version = Column(Integer, nullable=False, default=0, server_default="0")
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     listings = relationship("Listing", back_populates="owner", cascade="all, delete-orphan")
+
+class PasswordResetChallenge(Base):
+    __tablename__ = "password_reset_challenges"
+    id = Column(Integer, primary_key=True)
+    phone = Column(String(20), nullable=False, index=True)
+    code_hash = Column(String(64), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    next_send_at = Column(DateTime(timezone=True), nullable=False)
+    attempts = Column(Integer, nullable=False, default=0)
+    consumed_at = Column(DateTime(timezone=True), nullable=True)
+    __table_args__ = (
+        Index("ix_password_reset_challenges_phone_created", "phone", "created_at"),
+    )
 
 class Listing(Base):
     __tablename__ = "listings"

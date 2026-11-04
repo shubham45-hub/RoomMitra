@@ -13,3 +13,17 @@ export function signIn(phone, password) {
     body: JSON.stringify({ phone, password }),
   });
 }
+
+export function requestPasswordReset(phone) {
+  return apiRequest("/auth/password-reset/request", {
+    method: "POST",
+    body: JSON.stringify({ phone }),
+  });
+}
+
+export function confirmPasswordReset(phone, code, newPassword) {
+  return apiRequest("/auth/password-reset/confirm", {
+    method: "POST",
+    body: JSON.stringify({ phone, code, new_password: newPassword }),
+  });
+}

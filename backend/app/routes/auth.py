@@ -1,7 +1,10 @@
 import io
+import secrets
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
+from sqlalchemy import desc
 from sqlalchemy.exc import IntegrityError
 from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, EmailStr, Field
@@ -9,12 +12,14 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
-from app.models import User
+from app.models import PasswordResetChallenge, User
 from app.services.object_storage import delete_upload, resolve_upload_url, save_upload
+from app.services.password_reset_delivery import send_password_reset_code
 from app.services.phone import normalize_indian_phone
 from app.services.security import (
     create_access_token,
     get_current_user,
+    hash_password_reset_code,
     hash_password,
     verify_password,
 )
@@ -37,6 +42,15 @@ class SignIn(BaseModel):
     password: str = Field(min_length=1, max_length=128)
 
 
+class PasswordResetRequest(BaseModel):
+    phone: str = Field(min_length=10, max_length=16)
+
+
+class PasswordResetConfirm(PasswordResetRequest):
+    code: str = Field(pattern=r"^\d{6}$")
+    new_password: str = Field(min_length=8, max_length=128)
+
+
 class ProfileUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=100)
     email: EmailStr | None = None
@@ -54,7 +68,7 @@ def profile_data(user: User):
 
 def auth_response(user: User):
     return {
-        "access_token": create_access_token(user.id),
+        "access_token": create_access_token(user.id, user.password_version),
         "token_type": "bearer",
         "user": profile_data(user),
     }
@@ -101,6 +115,105 @@ def sign_in(body: SignIn, db: Session = Depends(get_db)):
     return auth_response(user)
 
 
+@router.post("/password-reset/request", status_code=status.HTTP_202_ACCEPTED)
+def request_password_reset(body: PasswordResetRequest, db: Session = Depends(get_db)):
+    phone = normalize_indian_phone(body.phone)
+    user = db.query(User).filter(User.phone == phone, User.is_active.is_(True)).with_for_update().first()
+    response = {
+        "detail": "If an account exists for this number, a reset code may arrive shortly."
+    }
+    if user is None:
+        return response
+
+    now = datetime.now(timezone.utc)
+    db.query(PasswordResetChallenge).filter(
+        PasswordResetChallenge.phone == phone,
+        PasswordResetChallenge.created_at < now - timedelta(days=1),
+    ).delete(synchronize_session=False)
+    recent_requests = db.query(PasswordResetChallenge).filter(
+        PasswordResetChallenge.phone == phone,
+        PasswordResetChallenge.created_at >= now - timedelta(hours=1),
+    ).count()
+    latest = db.query(PasswordResetChallenge).filter(
+        PasswordResetChallenge.phone == phone,
+    ).order_by(desc(PasswordResetChallenge.created_at)).first()
+    if (
+        recent_requests >= settings.password_reset_requests_per_hour
+        or (
+            latest is not None
+            and db.query(PasswordResetChallenge.id).filter(
+                PasswordResetChallenge.id == latest.id,
+                PasswordResetChallenge.next_send_at > now,
+            ).first()
+        )
+    ):
+        db.commit()
+        return response
+
+    db.query(PasswordResetChallenge).filter(
+        PasswordResetChallenge.phone == phone,
+        PasswordResetChallenge.consumed_at.is_(None),
+    ).update(
+        {PasswordResetChallenge.consumed_at: now},
+        synchronize_session=False,
+    )
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    challenge = PasswordResetChallenge(
+        phone=phone,
+        code_hash=hash_password_reset_code(phone, code),
+        created_at=now,
+        expires_at=now + timedelta(seconds=settings.password_reset_code_ttl_seconds),
+        next_send_at=now + timedelta(seconds=settings.password_reset_resend_seconds),
+    )
+    db.add(challenge)
+    db.commit()
+    try:
+        send_password_reset_code(phone, code)
+    except Exception as exc:
+        challenge.consumed_at = datetime.now(timezone.utc)
+        db.commit()
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "Could not send a password reset code. Please try again later.",
+        ) from exc
+
+    if settings.app_env == "development":
+        response["development_code"] = code
+    return response
+
+
+@router.post("/password-reset/confirm")
+def confirm_password_reset(body: PasswordResetConfirm, db: Session = Depends(get_db)):
+    phone = normalize_indian_phone(body.phone)
+    now = datetime.now(timezone.utc)
+    user = db.query(User).filter(
+        User.phone == phone,
+        User.is_active.is_(True),
+    ).with_for_update().first()
+    challenge = db.query(PasswordResetChallenge).filter(
+        PasswordResetChallenge.phone == phone,
+        PasswordResetChallenge.consumed_at.is_(None),
+        PasswordResetChallenge.expires_at > now,
+        PasswordResetChallenge.attempts < settings.password_reset_max_attempts,
+    ).order_by(desc(PasswordResetChallenge.created_at)).with_for_update().first()
+    if challenge is None or user is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid or expired reset code")
+
+    challenge.attempts += 1
+    expected_hash = hash_password_reset_code(phone, body.code)
+    if not secrets.compare_digest(challenge.code_hash, expected_hash):
+        if challenge.attempts >= settings.password_reset_max_attempts:
+            challenge.consumed_at = now
+        db.commit()
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Invalid or expired reset code")
+
+    user.password_hash = hash_password(body.new_password)
+    user.password_version += 1
+    challenge.consumed_at = now
+    db.commit()
+    return {"detail": "Password reset successfully. You can now sign in."}
+
+
 @router.get("/me")
 def read_profile(user: User = Depends(get_current_user)):
     return profile_data(user)
@@ -119,6 +232,9 @@ def delete_profile(
         if photo.image_url
     ]
 
+    db.query(PasswordResetChallenge).filter(
+        PasswordResetChallenge.phone == user.phone
+    ).delete(synchronize_session=False)
     db.delete(user)
     db.commit()
 

@@ -45,10 +45,22 @@ def verify_password(password: str, encoded_hash: str | None) -> bool:
     return hmac.compare_digest(actual_hash, expected_hash)
 
 
-def create_access_token(user_id: int) -> str:
+def hash_password_reset_code(phone: str, code: str) -> str:
+    secret = settings.password_reset_hmac_secret or "development-only-change-me"
+    return hmac.new(
+        secret.encode(), f"{phone}:{code}".encode(), hashlib.sha256
+    ).hexdigest()
+
+
+def create_access_token(user_id: int, password_version: int = 0) -> str:
     now = datetime.now(timezone.utc)
     return jwt.encode(
-        {"sub": str(user_id), "iat": now, "exp": now + timedelta(minutes=settings.access_token_expire_minutes)},
+        {
+            "sub": str(user_id),
+            "ver": password_version,
+            "iat": now,
+            "exp": now + timedelta(minutes=settings.access_token_expire_minutes),
+        },
         _jwt_secret(),
         algorithm=settings.jwt_algorithm,
     )
@@ -65,10 +77,11 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(bearer_
         payload = jwt.decode(token, _jwt_secret(), algorithms=[settings.jwt_algorithm])
         subject = payload.get("sub")
         user_id = int(subject)
+        password_version = int(payload.get("ver", 0))
     except (jwt.PyJWTError, TypeError, ValueError):
         raise unauthorized
     user = db.query(User).filter(User.id == user_id, User.is_active.is_(True)).first()
-    if user is None:
+    if user is None or user.password_version != password_version:
         raise unauthorized
     return user
 
